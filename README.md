@@ -8,7 +8,7 @@ ocamlc unix.cma main.ml -o a
 
 # Achievements
 
-Transform a proof script into an equivalent one-liner
+Transform a proof script into an equivalent one-liner!
 
 # Examples
 
