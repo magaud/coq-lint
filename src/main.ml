@@ -15,7 +15,7 @@ try
   
 (*  let _ = Format.print_string acc in
   let _ = Format.print_flush () in *)
-  let c = Unix.read fd s 0 1 in
+  let _ = Unix.read fd s 0 1 in
   (*if (c==0) then
     acc 
   else*)
@@ -25,6 +25,34 @@ try
     retrieve_answer_aux fd (cat acc (Bytes.to_string s))
 with Unix_error (EWOULDBLOCK,_,_) | Unix_error (EAGAIN,_,_) -> (*let  _ = Format.print_string "erreur" in let _ = Format.print_flush () in*) acc
 in retrieve_answer_aux fd empty
+
+
+let check s t nb =
+  let l = length t in
+let rec check_aux s t i =
+  if(i<0) then true else s.[i+nb]=t.[i] && check_aux s t (i-1)in
+check_aux s t (l-1);;
+
+let rec inter min max =
+  if (min=max) then [max] else min::(inter (min+1) max)
+
+let is_empty l =
+  match l with
+    [] -> true
+  | _::xs -> false
+
+(* s corresponds to t from position nb in s : returns the position *)
+
+let check_subterm s t =
+  let di = length s - length t in 
+  let l = inter 0 di in 
+  List.filter (fun x -> (check s t x)) l 
+
+let read_from_until s pos c =
+  let rec read_next s pos c acc =
+    if (s.[pos]==c) then acc else
+      read_next s (pos+1) c (cat acc (make 1 s.[pos]))
+in read_next s pos c empty
 
 let rec check_barre s i nb =
 if(nb=0) then true else s.[i+nb]='=' && check_barre s i (nb-1);;
@@ -39,8 +67,21 @@ if (check_all s p) then (number_of_goals s (p+28) (p::acc)) else number_of_goals
 with _ -> acc;;
 
 let query_ast n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format PpStr)))) Ast)")
-                                                                                               
-let generate_proof fd_in fd_out nb result =
+
+let query_goals n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format PpStr)))) Goals)")
+  
+let clean_string s = 
+  let ls = String.length s in
+  let rec clean_aux s i acc =
+    if (i>=ls)
+    then acc
+    else if (s.[i]=='\\' && s.[i+1]=='\\')
+    then clean_aux s (i+2) (String.cat acc (String.make 1 s.[i]))
+    else clean_aux s (i+1) (String.cat acc (String.make 1 s.[i]))
+    in clean_aux s 0 String.empty
+   
+
+let generate_proof_script fd_in fd_out nb result =
   let output = open_out result in
   let rec generate_proof_aux i nb =
     if (i>nb) then ()
@@ -51,11 +92,19 @@ let generate_proof fd_in fd_out nb result =
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
       let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
       let ans = retrieve_answer fd_in in
-      let _ = output_string output ans in
+      let ls = length "(ObjList((CoqString" in 
+      let v = check_subterm ans "(ObjList((CoqString" in
+      let _ = if (not (is_empty v)) then
+                let p = (List.hd v) in
+                let st = read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"') in
+                output_string output (clean_string st) in 
+let _ = output_string output (make 1 '\n') in 
+(*      let _ = output_string output ans in*)
       generate_proof_aux (i+1) nb 
   in generate_proof_aux 2 nb
 
-(* build_string returns a Coq sentence - a sentence which finishes with ". " without taking into account comments *) 
+(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
+(* without taking into account comments *) 
 let rec build_string ic acc =
 try
 let c = input_char ic in
@@ -81,8 +130,8 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (*  let _ = Unix.sleepf (1./.10.) in *)
       (*let _ = Format.print_string "IO:" in *)
       (*  let _ = Format.print_flush () in*)
-      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
-      let ans = retrieve_answer fd_in in
+      (*      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)*)
+      let _ = retrieve_answer fd_in in
       let _ = output_string output s in
       let _ = flush output in 
       (*  let _ = Format.print_string "atleastonce:" in *)
@@ -150,9 +199,9 @@ let nb = read_eval_print ic main_reading_end main_writing_end 0 "output.v" in
 
 let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
 let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
-let _ = generate_proof main_reading_end main_writing_end nb "output.v" in 
+let _ = generate_proof_script main_reading_end main_writing_end nb "output.v" in 
 let _ = kill pid 15 in 
-let _ = Format.print_string (string_of_int nb) in 
+(*let _ = Format.print_string (string_of_int nb) in *)
 let _ = wait () in 
 let _ = Format.print_string "-*- end of execution -*-\n" in
 Format.print_flush ()

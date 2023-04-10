@@ -8,6 +8,5 @@ Proof.
   split.
   right; assumption.
   right; assumption.
-  Show Script.
 Qed.
 
