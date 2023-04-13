@@ -58,11 +58,11 @@ let rec check_barre s i nb =
 if(nb=0) then true else s.[i+nb]='=' && check_barre s i (nb-1);;
 
 let check_all s i =
-s.[i] = '\n' && check_barre s (i+1) 27 && s.[i+29] = '\n';;
+  s.[i] = '\\' && s.[i+1]='n' && check_barre s (i+2) 27 && s.[i+30] = '\\' && s.[i+31]='n';;
 
 let rec number_of_goals s i acc =
 try
-let p = String.index_from s i '\n' in 
+let p = String.index_from s i '\\' in 
 if (check_all s p) then (number_of_goals s (p+28) (p::acc)) else number_of_goals s (p+1) acc
 with _ -> acc;;
 
@@ -80,10 +80,24 @@ let clean_string s =
     else clean_aux s (i+1) (String.cat acc (String.make 1 s.[i]))
     in clean_aux s 0 String.empty
    
+(*let display_string_char s =
+  let rec display_aux s p =
+    if (p>0) then
+      let _ = display_aux s (p-1) in 
+      let _ = Format.print_string "(" in
+      let _ = Format.print_string (make 1 s.[p]) in 
+      print_string ")" else ()
+  
+  in display_aux s ((String.length s) -1)
+*)
+let upper_case s =
+  let c = s.[0] in
+  c='A' || c='B' || c='C'|| c='D'|| c='E'|| c='F' || c='G' || c='H' || c='I' || c='J' || c='K' ||c='L'|| c='M' ||
+    c='N' || c='O'|| c='P'|| c='Q'|| c='R' || c='S' || c='T' || c='U' || c='V' || c='W' ||c='X'|| c='Y' || c='Z'
 
 let generate_proof_script fd_in fd_out nb result =
   let output = open_out result in
-  let rec generate_proof_aux i nb =
+  let rec generate_proof_aux i nb subgoals =
     if (i>nb) then ()
     else
       let string_to_send = query_ast i in
@@ -92,16 +106,66 @@ let generate_proof_script fd_in fd_out nb result =
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
       let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
       let ans = retrieve_answer fd_in in
+
       let ls = length "(ObjList((CoqString" in 
       let v = check_subterm ans "(ObjList((CoqString" in
-      let _ = if (not (is_empty v)) then
-                let p = (List.hd v) in
-                let st = read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"') in
-                output_string output (clean_string st) in 
-let _ = output_string output (make 1 '\n') in 
-(*      let _ = output_string output ans in*)
-      generate_proof_aux (i+1) nb 
-  in generate_proof_aux 2 nb
+      let st = if (not (is_empty v))
+               then
+                 let p = (List.hd v) in
+                 read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"')
+               else
+             "IGNORE_AST" in 
+      (*                let _ = output_string output "SCRIPT>" in*)
+      (*let _ = output_string output (clean_string st) in*)
+      (*                let _ = output_string output "<SCRIPT" in*)
+      (*                                output_string output "\n"  in *)
+      
+      (*      let _ = Unix.sleepf (1./.2.) in*)
+      let _ = Format.print_string st in
+      let _ = Format.print_flush () in 
+      let string2 = query_goals i in 
+      let _ = Format.print_string string2 in
+      let _ = Format.print_flush () in 
+      let _ = Unix.write_substring fd_out string2 0 (length string2) in
+      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
+      let ans2 = retrieve_answer fd_in in
+
+      let v2 = check_subterm ans2 "(ObjList((CoqString" in
+      let st2 = if (not (is_empty v2)) then
+                let p2 = (List.hd v2) in
+                read_from_until ans2 (p2+(ls+1)) (if (ans2.[p2+ls]=' ') then ')' else '\"')
+                else "IGNORE_GOALS" in
+      (*let _ = output_string output "GOALS>" in 
+        let _ = output_string output (clean_string st2) in
+        let _ = output_string output "<GOALS" in*)
+      (*                let _ = output_string output (cat (make 1 '%') (cat (make 1 st2.[6]) (make 1 '%'))) in *)
+      (*                let w = check_barre st2 20 27 in if (w) then let _ = output_string output "HERE" in *)
+      (*           let xx = clean_string st2 in 
+                   let _ = display_string_char xx in*)
+      (*      let _ = output_string output (clean_string st) in *)
+      (*                let _ = output_string output "\n" in *)
+      let newsubgoals =
+        if ((st2<>"IGNORE_GOALS") && (not (upper_case st)))
+        then List.length (number_of_goals (clean_string st2) 0 [])
+        else subgoals in
+      
+      let _ = if  (st="IGNORE_AST")
+              then  ()
+              else
+                let _ = output_string output (cat (clean_string st) "\n") in
+                let _ = if ((newsubgoals>subgoals) && (not (upper_case st))) then
+                          output_string output " { " else () in
+                if ((newsubgoals<subgoals) && (not (upper_case st))) then output_string output " } " else () in
+      (*                let _ = output_string output (string_of_int (nb_goals)) in *)
+       (*output_string output (clean_string st2) *)
+  (*                let nb_goals = List.length (number_of_goals st2 0 []) in 
+                    output_string output (string_of_int nb_goals) in *)
+  
+  (*      let _ = output_string output (make 1 '\n') in *)
+  (* let _ = output_string output ans2 in*)
+      
+      generate_proof_aux (i+1) nb newsubgoals
+  in generate_proof_aux 1 nb 0
 
 (* build_string returns a Coq sentence - a sentence which finishes with ". " *)
 (* without taking into account comments *) 
