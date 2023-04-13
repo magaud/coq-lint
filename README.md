@@ -13,6 +13,6 @@ Transform a proof script into an equivalent one-liner!
 # Examples
 
 # TODO
-
+* exchange { and Proof. 
 * handle nested comments properly
 

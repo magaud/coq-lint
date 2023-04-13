@@ -145,7 +145,7 @@ let generate_proof_script fd_in fd_out nb result =
       (*      let _ = output_string output (clean_string st) in *)
       (*                let _ = output_string output "\n" in *)
       let newsubgoals =
-        if ((st2<>"IGNORE_GOALS") && (not (upper_case st)))
+        if ((st2<>"IGNORE_GOALS"))(* && (not (upper_case st)))*)
         then List.length (number_of_goals (clean_string st2) 0 [])
         else subgoals in
       
@@ -153,7 +153,7 @@ let generate_proof_script fd_in fd_out nb result =
               then  ()
               else
                 let _ = output_string output (cat (clean_string st) "\n") in
-                let _ = if ((newsubgoals>subgoals) && (not (upper_case st))) then
+                let _ = if ((newsubgoals>subgoals))(* && (not (upper_case st)))*) then
                           output_string output " { " else () in
                 if ((newsubgoals<subgoals) && (not (upper_case st))) then output_string output " } " else () in
       (*                let _ = output_string output (string_of_int (nb_goals)) in *)
