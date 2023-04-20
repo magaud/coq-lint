@@ -95,9 +95,50 @@ let upper_case s =
   c='A' || c='B' || c='C'|| c='D'|| c='E'|| c='F' || c='G' || c='H' || c='I' || c='J' || c='K' ||c='L'|| c='M' ||
     c='N' || c='O'|| c='P'|| c='Q'|| c='R' || c='S' || c='T' || c='U' || c='V' || c='W' ||c='X'|| c='Y' || c='Z'
 
+
+let remove_trailing_dot s =
+  let l=length s in 
+  if s.[l-1]='.' then sub s 0 (l-1) else s
+
+let remove_closing_par s =
+    let l=length s in 
+    if s.[l-1]=')'then sub s 0 (l-1) else s
+
+let remove_opening_par s =
+  let l=length s in 
+  if (s.[0]=='(') then sub s 1 (l-1) else s
+
+let strip s = remove_opening_par (remove_closing_par (remove_trailing_dot s))
+
+let rec closing_goals s =
+if (s=[]) then [] else 
+  let h = List.hd s in 
+  if (h>0) then (h-1)::(List.tl s) else closing_goals (List.tl s) 
+
+let rec closes_all output subgoals newsubgoals lsubgoals =
+  if (lsubgoals=[])
+  then output_string output " . "
+  else let h =  List.hd lsubgoals in
+       if (h>0)
+       then if (newsubgoals<>0) then output_string output " | " else () 
+       else let _ = output_string output " ]" in closes_all output subgoals newsubgoals (List.tl lsubgoals)
+  
+let connectives output subgoals newsubgoals lsubgoals =
+(*  let _ = output_string output (string_of_int subgoals) in
+  let _ = output_string output "AND" in
+  let _ = output_string output (string_of_int newsubgoals) in*)
+  if (newsubgoals>subgoals)
+  then output_string output "; [ "
+  else
+    if (newsubgoals<subgoals)
+    then closes_all output subgoals newsubgoals lsubgoals
+    else 
+      if (newsubgoals<>0) then output_string output " ; " else output_string output "FIN"
+  
+
 let generate_proof_script fd_in fd_out nb result =
   let output = open_out result in
-  let rec generate_proof_aux i nb subgoals =
+  let rec generate_proof_aux i nb subgoals lsubgoals =
     if (i>nb) then ()
     else
       let string_to_send = query_ast i in
@@ -148,24 +189,42 @@ let generate_proof_script fd_in fd_out nb result =
         if ((st2<>"IGNORE_GOALS"))(* && (not (upper_case st)))*)
         then List.length (number_of_goals (clean_string st2) 0 [])
         else subgoals in
-      
+      let newlsubgoals = if (newsubgoals>subgoals)
+                         then (newsubgoals-subgoals)::lsubgoals
+                         else
+                           if (newsubgoals<subgoals)
+                           then closing_goals lsubgoals
+                           else lsubgoals in 
       let _ = if  (st="IGNORE_AST")
               then  ()
               else
-                let _ = output_string output (cat (clean_string st) "\n") in
-                let _ = if ((newsubgoals>subgoals))(* && (not (upper_case st)))*) then
-                          output_string output " { " else () in
-                if ((newsubgoals<subgoals) && (not (upper_case st))) then output_string output " } " else () in
-      (*                let _ = output_string output (string_of_int (nb_goals)) in *)
-       (*output_string output (clean_string st2) *)
+                let os_aux = if (upper_case st) then (clean_string st) else (strip (clean_string st)) in
+                (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
+                let _ = output_string output os_aux in
+                let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
+
+               (*   if ((newsubgoals>subgoals) && (not (upper_case st)))
+                        then
+                          output_string output " ; [ "
+                        else 
+                          if ((newsubgoals<subgoals) && (not (upper_case st)))
+                          then if ((lsubgoals<>[]) && (List.hd lsubgoals>0))
+                               then output_string output " | "
+                               else output_string output " ]"
+                          else
+                            if (not (upper_case st)) then output_string output " ;2 " else () in*)
+                                let _ = if ((newsubgoals=0) && (not (upper_case st)))then output_string output ".\n" else () in 
+                if (upper_case st) then output_string output "\n" else () in 
+  (*                let _ = output_string output (string_of_int (nb_goals)) in *)
+  (*output_string output (clean_string st2) *)
   (*                let nb_goals = List.length (number_of_goals st2 0 []) in 
                     output_string output (string_of_int nb_goals) in *)
   
   (*      let _ = output_string output (make 1 '\n') in *)
   (* let _ = output_string output ans2 in*)
       
-      generate_proof_aux (i+1) nb newsubgoals
-  in generate_proof_aux 1 nb 0
+      generate_proof_aux (i+1) nb newsubgoals newlsubgoals
+  in generate_proof_aux 1 nb 0 []
 
 (* build_string returns a Coq sentence - a sentence which finishes with ". " *)
 (* without taking into account comments *) 
