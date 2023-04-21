@@ -75,10 +75,12 @@ let clean_string s =
   let rec clean_aux s i acc =
     if (i>=ls)
     then acc
-    else if (s.[i]=='\\' && s.[i+1]=='\\')
+    else if (s.[i]=='\\' && s.[i+1]=='\\') 
     then clean_aux s (i+2) (String.cat acc (String.make 1 s.[i]))
+    else if (s.[i]=='\\' && s.[i+1]=='n')
+    then clean_aux s (i+2) (String.cat acc (String.make 1 '\n'))
     else clean_aux s (i+1) (String.cat acc (String.make 1 s.[i]))
-    in clean_aux s 0 String.empty
+  in clean_aux s 0 String.empty
    
 (*let display_string_char s =
   let rec display_aux s p =
@@ -108,7 +110,9 @@ let remove_opening_par s =
   let l=length s in 
   if (s.[0]=='(') then sub s 1 (l-1) else s
 
-let strip s = remove_opening_par (remove_closing_par (remove_trailing_dot s))
+let strip s =
+  let without_dot =  (remove_trailing_dot s) in 
+  if (without_dot.[0]=='(') then remove_opening_par (remove_closing_par without_dot) else without_dot
 
 let rec closing_goals s =
 if (s=[]) then [] else 
@@ -133,7 +137,7 @@ let connectives output subgoals newsubgoals lsubgoals =
     if (newsubgoals<subgoals)
     then closes_all output subgoals newsubgoals lsubgoals
     else 
-      if (newsubgoals<>0) then output_string output " ; " else output_string output "FIN"
+      if (newsubgoals<>0) then output_string output " ; " else output_string output ""
   
 
 let generate_proof_script fd_in fd_out nb result =
@@ -187,7 +191,7 @@ let generate_proof_script fd_in fd_out nb result =
       (*                let _ = output_string output "\n" in *)
       let newsubgoals =
         if ((st2<>"IGNORE_GOALS"))(* && (not (upper_case st)))*)
-        then List.length (number_of_goals (clean_string st2) 0 [])
+        then List.length (number_of_goals ((*(clean_string*) st2) 0 [])
         else subgoals in
       let newlsubgoals = if (newsubgoals>subgoals)
                          then (newsubgoals-subgoals)::lsubgoals
@@ -240,11 +244,23 @@ let c = input_char ic in
 
 with End_of_file -> close_in ic; acc
 
+(*let rec last s = match s with [] -> failwith "error last " | [x] -> x | x::y::xs -> last (y::xs)*)
+
+let rec remove_structure_in_string s =
+  if (s.[0]=' ')
+  then
+    remove_structure_in_string (sub s 1 ((String.length s)-1))
+  else
+    if ((s.[0]='+')||(s.[0]='-')||(s.[0]='*'))
+    then
+      (sub s 1 ((String.length s)-1))
+    else s
+
 let rec read_eval_print ic fd_in fd_out nb_iter result =
   let output = open_out result in 
   let rec read_eval_print_aux ic fd_in fd_out nb_iter =  
     try
-      let s = build_string ic empty in 
+      let s = remove_structure_in_string (build_string ic empty) in 
       let string_to_send = cat ("(Add () \"") (cat s "\")") in
       let _ = Format.print_string s in
       let _ = Format.print_flush () in 
@@ -263,7 +279,7 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (*let _ = Format.print_string ":" in*)
       let _ = Format.print_flush () in 
       (* print the "s" into a new file *)
-      
+      let _ = if (upper_case s) then output_string output s else () in 
       read_eval_print_aux ic fd_in fd_out (nb_iter+1)
     with _ (* Bad file descriptor exception *) -> nb_iter in
   read_eval_print_aux ic fd_in fd_out nb_iter
@@ -317,12 +333,12 @@ let _ = close sertop_writing_end in
 (*let _ = close main_writing_end in*)
 
 (*let _  = Format.print_string "ok-parent" in*)
-
-let nb = read_eval_print ic main_reading_end main_writing_end 0 "output.v" in
+let vfile = cat "translated_files/" (Filename.basename Sys.argv.(1)) in 
+let nb = read_eval_print ic main_reading_end main_writing_end 0 vfile in
 
 let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
 let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
-let _ = generate_proof_script main_reading_end main_writing_end nb "output.v" in 
+let _ = generate_proof_script main_reading_end main_writing_end nb vfile in 
 let _ = kill pid 15 in 
 (*let _ = Format.print_string (string_of_int nb) in *)
 let _ = wait () in 
