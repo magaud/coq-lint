@@ -1,0 +1,8 @@
+#!/bin/sh
+cd translated_files
+for i in *.v
+do
+echo "compiling " $i "..."
+coqc $i
+done 
+cd ..
