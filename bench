@@ -1,8 +1,12 @@
 #!/bin/sh
-cd translated_files
-for i in *.v
+rm translated_files/*.v
+rm translated_files/*.vo
+rm translated_files/*.vok
+
+for i in examples/*.v
 do
 echo "compiling " $i "..."
-coqc $i
+bin/clint $i 
+coqc translated_files/$(basename $i)
 done 
-cd ..
+

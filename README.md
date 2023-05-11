@@ -19,3 +19,6 @@ Transform a proof script into an equivalent one-liner!
 * keep comments and handle nested comments properly
 * change whether () and . should always be removed. example : now rewrite (Nat.add_succ_r y x.
 * remove - and * and + when reading the initial file
+* when 'by' occurs in the tactic : put everything in '( )'
+* deal with proof steps of the shape "3: intros; reflexivity"
+* deal with structure introduced by { and } properly

@@ -246,6 +246,18 @@ with End_of_file -> close_in ic; acc
 
 (*let rec last s = match s with [] -> failwith "error last " | [x] -> x | x::y::xs -> last (y::xs)*)
 
+(* recognize the pattern tac1 by tac2., and write tac1 by (tac2) " by " *)
+let split_on_string s t =
+let rec split s t acc = 
+  let ls = String.length s in
+  let lt = String.length t in
+  if (ls<lt) then [acc]  else
+    if (starts_with t s) then [acc; sub s lt (ls-lt)] else split (sub s 1 (ls-1)) t (cat  acc (make 1 s.[0]))
+in split s t empty
+  
+let my_secure_merge t1 t2 =
+  cat t1 (cat " by (" (cat ( remove_trailing_dot t2) ")."))
+                       
 let rec remove_structure_in_string s =
   if (s.[0]=' ')
   then
