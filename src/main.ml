@@ -114,6 +114,23 @@ let strip s =
   let without_dot =  (remove_trailing_dot s) in 
   if (without_dot.[0]=='(') then remove_opening_par (remove_closing_par without_dot) else without_dot
 
+(* recognize the pattern tac1 by tac2., and write tac1 by (tac2) " by " *)
+let split_on_string s t =
+let rec split s t acc = 
+  let ls = String.length s in
+  let lt = String.length t in
+  if (ls<lt) then [acc]  else
+    if (starts_with ~prefix:t s) then [acc; sub s lt (ls-lt)] else split (sub s 1 (ls-1)) t (cat  acc (make 1 s.[0]))
+in split s t empty
+  
+let my_secure_merge t1 t2 li =
+  cat t1 (cat li (cat "(" (cat ( remove_trailing_dot t2) ").")))
+
+let full_split s t =
+  let l = split_on_string s t in
+  match l with [a;b] -> my_secure_merge a b t | [a] -> s | _ -> failwith "full_split"
+
+
 let rec closing_goals s =
 if (s=[]) then [] else 
   let h = List.hd s in 
@@ -202,7 +219,7 @@ let generate_proof_script fd_in fd_out nb result =
       let _ = if  (st="IGNORE_AST")
               then  ()
               else
-                let os_aux = if (upper_case st) then (clean_string st) else (strip (clean_string st)) in
+                let os_aux = if (upper_case st) then (clean_string st) else (strip (full_split (clean_string st) " by ")) in
                 (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
                 let _ = output_string output os_aux in
                 let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
@@ -246,18 +263,7 @@ with End_of_file -> close_in ic; acc
 
 (*let rec last s = match s with [] -> failwith "error last " | [x] -> x | x::y::xs -> last (y::xs)*)
 
-(* recognize the pattern tac1 by tac2., and write tac1 by (tac2) " by " *)
-let split_on_string s t =
-let rec split s t acc = 
-  let ls = String.length s in
-  let lt = String.length t in
-  if (ls<lt) then [acc]  else
-    if (starts_with t s) then [acc; sub s lt (ls-lt)] else split (sub s 1 (ls-1)) t (cat  acc (make 1 s.[0]))
-in split s t empty
-  
-let my_secure_merge t1 t2 =
-  cat t1 (cat " by (" (cat ( remove_trailing_dot t2) ")."))
-                       
+ 
 let rec remove_structure_in_string s =
   if (s.[0]=' ')
   then
