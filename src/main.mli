@@ -13,7 +13,7 @@ val clean_string : string -> string
 val upper_case : string -> bool
 val generate_proof_script :
   Unix.file_descr -> Unix.file_descr -> int -> string -> unit
-val build_string : in_channel -> string -> string
+val build_string : in_channel -> string -> bool -> string
 val read_eval_print :
   in_channel -> Unix.file_descr -> Unix.file_descr -> int -> string -> int
 val main : unit -> unit

@@ -93,24 +93,26 @@ let clean_string s =
   in display_aux s ((String.length s) -1)
 *)
 let upper_case s =
-  let c = s.[0] in
-  c='A' || c='B' || c='C'|| c='D'|| c='E'|| c='F' || c='G' || c='H' || c='I' || c='J' || c='K' ||c='L'|| c='M' ||
-    c='N' || c='O'|| c='P'|| c='Q'|| c='R' || c='S' || c='T' || c='U' || c='V' || c='W' ||c='X'|| c='Y' || c='Z'
+  if (s=empty)
+  then false
+  else 
+    let c = s.[0] in
+    c='A' || c='B' || c='C'|| c='D'|| c='E'|| c='F' || c='G' || c='H' || c='I' || c='J' || c='K' ||c='L'|| c='M' ||
+      c='N' || c='O'|| c='P'|| c='Q'|| c='R' || c='S' || c='T' || c='U' || c='V' || c='W' ||c='X'|| c='Y' || c='Z'
 
-
-let remove_trailing_dot s =
+let remove_trailing_dot s = if (s=empty) then s else 
   let l=length s in 
   if s.[l-1]='.' then sub s 0 (l-1) else s
 
-let remove_closing_par s =
+let remove_closing_par s = if (s=empty) then s else 
     let l=length s in 
     if s.[l-1]=')'then sub s 0 (l-1) else s
 
-let remove_opening_par s =
+let remove_opening_par s = if (s=empty) then s else 
   let l=length s in 
   if (s.[0]=='(') then sub s 1 (l-1) else s
 
-let strip s =
+let strip s = if (s=empty) then s else 
   let without_dot =  (remove_trailing_dot s) in 
   if (without_dot.[0]=='(') then remove_opening_par (remove_closing_par without_dot) else without_dot
 
@@ -184,10 +186,12 @@ let generate_proof_script fd_in fd_out nb result =
       
       (*      let _ = Unix.sleepf (1./.2.) in*)
       let _ = Format.print_string st in
-      let _ = Format.print_flush () in 
+      let _ = Format.print_flush () in
+      let _ = Format.print_string "\n" in 
       let string2 = query_goals i in 
       let _ = Format.print_string string2 in
-      let _ = Format.print_flush () in 
+      let _ = Format.print_flush () in
+      let _ = Format.print_string "\n" in 
       let _ = Unix.write_substring fd_out string2 0 (length string2) in
       let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
       let ans2 = retrieve_answer fd_in in
@@ -247,50 +251,70 @@ let generate_proof_script fd_in fd_out nb result =
       generate_proof_aux (i+1) nb newsubgoals newlsubgoals
   in generate_proof_aux 1 nb 0 []
 
+
+let rec build_string ic acc b =
+  try
+    let c = input_char ic in
+    if b 
+    then (* not looking at the second character *)
+      if (c='.')
+      then build_string ic (cat acc (String.make 1 c)) (not b)
+      else build_string ic (cat acc (String.make 1 c)) b
+    else (* checking what the next character is *)
+      if ((c==' ')||(c=='\n')||(c=='\t')||(c=='}'))
+      then cat acc (String.make 1 c)
+      else build_string ic (String.make 1 c) (not b)
+with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
+
 (* build_string returns a Coq sentence - a sentence which finishes with ". " *)
 (* without taking into account comments *) 
-let rec build_string ic acc =
+let rec build_string2 ic acc =
 try
 let c = input_char ic in
   if (c=='.') then
   (let d = input_char ic in
-  if ((d==' ')||(d=='\n')||(d=='}'))
+  if ((d==' ')||(d=='\n')||(d=='\t')||(d=='}'))
   then cat acc (cat (String.make 1 c) (String.make 1 d))
-  else build_string ic (cat acc (cat (String.make 1 c) (String.make 1 d))))
-  else build_string ic (cat acc (String.make 1 c))
+  else build_string2 ic (cat acc (cat (String.make 1 c) (String.make 1 d))))
+  else build_string2 ic (cat acc (String.make 1 c))
 
-with End_of_file -> close_in ic; acc
+with _ (*End_of_file*) -> let _ = print_string (cat "->" (cat acc "<-")) in close_in ic; acc
 
 (*let rec last s = match s with [] -> failwith "error last " | [x] -> x | x::y::xs -> last (y::xs)*)
 
  
 let rec remove_structure_in_string s =
-  if (s.[0]=' ')
-  then
-    remove_structure_in_string (sub s 1 ((String.length s)-1))
+  if ((s=empty)||s.[0]='\n')
+  then s
   else
-    if ((s.[0]='+')||(s.[0]='-')||(s.[0]='*'))
+    if (s.[0]=' ')
     then
-      (sub s 1 ((String.length s)-1))
-    else s
+      remove_structure_in_string (sub s 1 ((String.length s)-1))
+    else
+      if ((s.[0]='+')||(s.[0]='-')||(s.[0]='*'))
+      then
+        (sub s 1 ((String.length s)-1))
+      else s
 
 let rec read_eval_print ic fd_in fd_out nb_iter result =
   let output = open_out result in 
   let rec read_eval_print_aux ic fd_in fd_out nb_iter =  
-    try
-      let s = remove_structure_in_string (build_string ic empty) in 
-      let string_to_send = cat ("(Add () \"") (cat s "\")") in
-      let _ = Format.print_string s in
+    try let s = remove_structure_in_string (build_string ic empty true) in  
+        
+        let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
+        
+        let _ = Format.print_string (cat (string_of_int nb_iter) string_to_send) in
+      let _ = Format.print_string "\n" in
       let _ = Format.print_flush () in 
       (* let _ = Format.print_string string_to_send in*)
-      let _ =  Unix.write_substring fd_out string_to_send 0 (length string_to_send) in 
+      let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
       (*  let _ = Unix.sleepf (1./.10.) in *)
       (*let _ = Format.print_string "IO:" in *)
       (*  let _ = Format.print_flush () in*)
       (*      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)*)
       let _ = retrieve_answer fd_in in
-      let _ = output_string output s in
-      let _ = flush output in 
+      (*let _ = output_string output s in
+      let _ = flush output in *)
       (*  let _ = Format.print_string "atleastonce:" in *)
       (*  let _ = Format.print_flush () in *)
       (*  let _ = Format.print_string ans in*)
@@ -299,7 +323,7 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (* print the "s" into a new file *)
       let _ = if (upper_case s) then output_string output s else () in 
       read_eval_print_aux ic fd_in fd_out (nb_iter+1)
-    with _ (* Bad file descriptor exception *) -> nb_iter in
+    with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in nb_iter  in
   read_eval_print_aux ic fd_in fd_out nb_iter
 
 (*
