@@ -26,20 +26,15 @@ try
 with Unix_error (EWOULDBLOCK,_,_) | Unix_error (EAGAIN,_,_) -> (*let  _ = Format.print_string "erreur" in let _ = Format.print_flush () in*) acc
 in retrieve_answer_aux fd empty
 
-
 let check s t nb =
   let l = length t in
 let rec check_aux s t i =
   if(i<0) then true else s.[i+nb]=t.[i] && check_aux s t (i-1)in
 check_aux s t (l-1);;
 
+(* computes the list of the elements between min and max = [min; ... ; max] *)
 let rec inter min max =
   if (min=max) then [max] else min::(inter (min+1) max)
-
-let is_empty l =
-  match l with
-    [] -> true
-  | _::xs -> false
 
 (* s corresponds to t from position nb in s : returns the position *)
 
@@ -112,8 +107,8 @@ let remove_opening_par s = if (s=empty) then s else
   let l=length s in 
   if (s.[0]=='(') then sub s 1 (l-1) else s
 
-let strip s = if (s=empty) then s else 
-  let without_dot =  (remove_trailing_dot s) in 
+let strip_par_and_closing_dot s = if (s=empty) then s else 
+  let without_dot =  remove_trailing_dot s in 
   if (without_dot.[0]=='(') then remove_opening_par (remove_closing_par without_dot) else without_dot
 
 (* recognize the pattern tac1 by tac2., and write tac1 by (tac2) " by " *)
@@ -131,7 +126,6 @@ let my_secure_merge t1 t2 li =
 let full_split s t =
   let l = split_on_string s t in
   match l with [a;b] -> my_secure_merge a b t | [a] -> s | _ -> failwith "full_split"
-
 
 let rec closing_goals s =
 if (s=[]) then [] else 
@@ -173,7 +167,7 @@ let generate_proof_script fd_in fd_out nb result =
 
       let ls = length "(ObjList((CoqString" in 
       let v = check_subterm ans "(ObjList((CoqString" in
-      let st = if (not (is_empty v))
+      let st = if (v<>[])
                then
                  let p = (List.hd v) in
                  read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"')
@@ -197,7 +191,7 @@ let generate_proof_script fd_in fd_out nb result =
       let ans2 = retrieve_answer fd_in in
 
       let v2 = check_subterm ans2 "(ObjList((CoqString" in
-      let st2 = if (not (is_empty v2)) then
+      let st2 = if (v2<>[]) then
                 let p2 = (List.hd v2) in
                 read_from_until ans2 (p2+(ls+1)) (if (ans2.[p2+ls]=' ') then ')' else '\"')
                 else "IGNORE_GOALS" in
@@ -223,7 +217,7 @@ let generate_proof_script fd_in fd_out nb result =
       let _ = if  (st="IGNORE_AST")
               then  ()
               else
-                let os_aux = if (upper_case st) then (clean_string st) else (strip (full_split (clean_string st) " by ")) in
+                let os_aux = if (upper_case st) then (clean_string st) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
                 (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
                 let _ = output_string output os_aux in
                 let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
@@ -252,6 +246,8 @@ let generate_proof_script fd_in fd_out nb result =
   in generate_proof_aux 1 nb 0 []
 
 
+(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
+(* without taking into account comments *)
 let rec build_string ic acc b =
   try
     let c = input_char ic in
@@ -263,28 +259,12 @@ let rec build_string ic acc b =
     else (* checking what the next character is *)
       if ((c==' ')||(c=='\n')||(c=='\t')||(c=='}'))
       then cat acc (String.make 1 c)
-      else build_string ic (String.make 1 c) (not b)
-with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
-
-(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
-(* without taking into account comments *) 
-let rec build_string2 ic acc =
-try
-let c = input_char ic in
-  if (c=='.') then
-  (let d = input_char ic in
-  if ((d==' ')||(d=='\n')||(d=='\t')||(d=='}'))
-  then cat acc (cat (String.make 1 c) (String.make 1 d))
-  else build_string2 ic (cat acc (cat (String.make 1 c) (String.make 1 d))))
-  else build_string2 ic (cat acc (String.make 1 c))
-
-with _ (*End_of_file*) -> let _ = print_string (cat "->" (cat acc "<-")) in close_in ic; acc
-
-(*let rec last s = match s with [] -> failwith "error last " | [x] -> x | x::y::xs -> last (y::xs)*)
+      else build_string ic (cat acc (String.make 1 c)) (not b)
+  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
 
  
 let rec remove_structure_in_string s =
-  if ((s=empty)||s.[0]='\n')
+  if ((s=empty))(*||(s.[0]='\n'))*)
   then s
   else
     if (s.[0]=' ')

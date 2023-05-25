@@ -1,7 +1,6 @@
 val retrieve_answer : Unix.file_descr -> string
 val check : string -> string -> int -> bool
 val inter : int -> int -> int list
-val is_empty : 'a list -> bool
 val check_subterm : string -> string -> int list
 val read_from_until : string -> int -> char -> string
 val check_barre : string -> int -> int -> bool
