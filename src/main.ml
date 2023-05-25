@@ -260,7 +260,7 @@ let rec build_string ic acc b =
       if ((c==' ')||(c=='\n')||(c=='\t')||(c=='}'))
       then cat acc (String.make 1 c)
       else build_string ic (cat acc (String.make 1 c)) (not b)
-  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
+  with End_of_file -> (*let _ = print_string (cat "-->" (cat acc "<--")) in*) close_in ic; acc
 
  
 let rec remove_structure_in_string s =
@@ -283,8 +283,7 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
         
         let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
         
-        let _ = Format.print_string (cat (string_of_int nb_iter) string_to_send) in
-      let _ = Format.print_string "\n" in
+        let _ = Format.print_string s (*(cat (string_of_int nb_iter) string_to_send)*) in
       let _ = Format.print_flush () in 
       (* let _ = Format.print_string string_to_send in*)
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
@@ -303,7 +302,7 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (* print the "s" into a new file *)
       let _ = if (upper_case s) then output_string output s else () in 
       read_eval_print_aux ic fd_in fd_out (nb_iter+1)
-    with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in nb_iter  in
+    with  _ (* Bad file descriptor exception *) -> (*let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in*) nb_iter  in
   read_eval_print_aux ic fd_in fd_out nb_iter
 
 (*
@@ -313,11 +312,15 @@ let _ = read fd_in answer 0 10000 in
 Format.print_string (Bytes.to_string answer)
  *)
 let main () =
-let _ = Printf.printf "-*- Starting up coq-lint (very experimental : Mon Apr  3 14:01:22 CEST 2023) -*-\n" in
-let _ = for i = 0 to Array.length Sys.argv - 1 do
+let _ = Printf.printf "-*- Starting up coq-lint (very experimental : Thu May 25 15:59:54 CEST 2023) -*-\n" in
+let nb_args = Array.length Sys.argv - 1 in 
+let _ = for i = 0 to nb_args do
 Printf.printf "[%i] %s\n" i Sys.argv.(i) done in
 let filename = Sys.argv.(1) in
-let _ = Format.print_string filename in
+(*let _ = Format.print_string filename in*)
+(*let _ = print_newline () in*)
+let output_file = if ((nb_args>=3) && Sys.argv.(2)="-o") then Sys.argv.(3) else "one_liner.v" in 
+let _ = print_string (cat "NEW FILE:" output_file) in
 let _ = print_newline () in
 let ic = open_in filename in
 (*let _ = reader ic in *)
@@ -355,7 +358,7 @@ let _ = close sertop_writing_end in
 (*let _ = close main_writing_end in*)
 
 (*let _  = Format.print_string "ok-parent" in*)
-let vfile = cat "translated_files/" (Filename.basename Sys.argv.(1)) in 
+let vfile = output_file in (*cat "translated_files/" (Filename.basename Sys.argv.(1)) in *)
 let nb = read_eval_print ic main_reading_end main_writing_end 0 vfile in
 
 let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in

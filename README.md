@@ -22,3 +22,4 @@ Transform a proof script into an equivalent one-liner!
 * when 'by' occurs in the tactic : put everything in '( )'
 * deal with proof steps of the shape "3: intros; reflexivity"
 * deal with structure introduced by { and } properly
+* handle correctly the remaining "Check" and "Print" inside the proof steps
