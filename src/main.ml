@@ -1,5 +1,7 @@
 (* ocamlc unix.cma main.ml -o a *)
 
+(* options to take into account : grep "^-R" _CoqProject | sed -e 's/ /,/2'  *)
+
 open Stdlib
 open Format
 open Char
@@ -64,19 +66,21 @@ with _ -> acc;;
 let query_ast n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format PpStr)))) Ast)")
 
 let query_goals n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format PpStr)))) Goals)")
-  
+(*  let clean_string s = s*)
 let clean_string s = 
   let ls = String.length s in
   let rec clean_aux s i acc =
     if (i>=ls)
     then acc
-    else if (s.[i]=='\\' && s.[i+1]=='\\') 
-    then clean_aux s (i+2) (String.cat acc (String.make 1 s.[i]))
-    else if (s.[i]=='\\' && s.[i+1]=='n')
-    then clean_aux s (i+2) (String.cat acc (String.make 1 '\n'))
-    else clean_aux s (i+1) (String.cat acc (String.make 1 s.[i]))
+    else
+      if (s.[i]=='\\' && s.[i+1]=='n')
+      then clean_aux s (i+2) (String.cat acc (String.make 1 '\n'))
+      else
+        if (s.[i]=='\\' && s.[i+1]=='\\')
+        then clean_aux s (i+2) (String.cat acc (String.make 1 '\\')) (*(String.make 1 s.[i]))*)
+        else clean_aux s (i+1) (String.cat acc (String.make 1 s.[i]))
   in clean_aux s 0 String.empty
-   
+
 (*let display_string_char s =
   let rec display_aux s p =
     if (p>0) then
@@ -172,13 +176,12 @@ let generate_proof_script fd_in fd_out nb result =
                  let p = (List.hd v) in
                  read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"')
                else
-             "IGNORE_AST" in 
+                 "IGNORE_AST" (* (cat "IGNORE_AST" s) *) in 
       (*                let _ = output_string output "SCRIPT>" in*)
       (*let _ = output_string output (clean_string st) in*)
       (*                let _ = output_string output "<SCRIPT" in*)
       (*                                output_string output "\n"  in *)
       
-      (*      let _ = Unix.sleepf (1./.2.) in*)
       let _ = Format.print_string st in
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
@@ -251,16 +254,20 @@ let generate_proof_script fd_in fd_out nb result =
 let rec build_string ic acc b =
   try
     let c = input_char ic in
+(*let _ = if (c='\\') then print_string "BUG" else print_char c in
+let _ = print_string "-"in *)
     if b 
     then (* not looking at the second character *)
       if (c='.')
       then build_string ic (cat acc (String.make 1 c)) (not b)
       else build_string ic (cat acc (String.make 1 c)) b
-    else (* checking what the next character is *)
+    else
+      (*if (c='\\') then let d = input_char ic in let _ = print_string (String.make 1 d) in build_string ic (cat acc (String.make 1 '\\')) b else *)
+      (* checking what the next character is *)
       if ((c==' ')||(c=='\n')||(c=='\t')||(c=='}'))
       then cat acc (String.make 1 c)
       else build_string ic (cat acc (String.make 1 c)) (not b)
-  with End_of_file -> (*let _ = print_string (cat "-->" (cat acc "<--")) in*) close_in ic; acc
+  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
 
  
 let rec remove_structure_in_string s =
@@ -279,11 +286,13 @@ let rec remove_structure_in_string s =
 let rec read_eval_print ic fd_in fd_out nb_iter result =
   let output = open_out result in 
   let rec read_eval_print_aux ic fd_in fd_out nb_iter =  
-    try let s = remove_structure_in_string (build_string ic empty true) in  
-        
+    try let s' = (build_string ic empty true) in
+        let _ = Format.print_string s' in 
+        let s  = remove_structure_in_string s' in 
         let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
         
         let _ = Format.print_string s (*(cat (string_of_int nb_iter) string_to_send)*) in
+        let _ = Format.print_string string_to_send (*(cat (string_of_int nb_iter) string_to_send)*) in
       let _ = Format.print_flush () in 
       (* let _ = Format.print_string string_to_send in*)
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
@@ -312,8 +321,10 @@ let _ = read fd_in answer 0 10000 in
 Format.print_string (Bytes.to_string answer)
  *)
 let main () =
-let _ = Printf.printf "-*- Starting up coq-lint (very experimental : Thu May 25 15:59:54 CEST 2023) -*-\n" in
+let _ = print_string "-*- Starting up coq-lint (alpha version: Fri May 26 17:26:21 CEST 2023) -*-\n" in
 let nb_args = Array.length Sys.argv - 1 in 
+let _ = if (nb_args<1) then
+          let _ = print_string (cat "usage: " (cat Sys.argv.(0) " <input.v> [ -o <output.v> ]\n")) in exit(1) in 
 let _ = for i = 0 to nb_args do
 Printf.printf "[%i] %s\n" i Sys.argv.(i) done in
 let filename = Sys.argv.(1) in
@@ -338,7 +349,10 @@ let _ = dup2 sertop_writing_end stdout in
 let _ = close sertop_reading_end in
 let _ = close sertop_writing_end in 
 (*let _  = Format.print_string "ok-child" in *)
-let _ = (*Format.print_string "wait" *)execvp "sertop" [| "sertop" (*; "--printer=human"*)|] in
+let current_dir = Sys.getcwd() in
+let option1 = "-R" in 
+let option2 = (cat current_dir ",GeoCoq") in 
+let _ = (*Format.print_string "wait" *)execvp "sertop" [| "sertop" ; option1; option2 (*; "--printer=human"*)|] in
 let _ = Format.print_string "oops\n" in
 (*let w = (Bytes.create 26) in 
 let  _ = read sertop_reading_end w 0 26 in
