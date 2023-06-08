@@ -277,19 +277,28 @@ let rec build_string ic acc b =
         let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
 
     match c with
-      '(' -> if (b mod 3 == 0)
+      '(' -> if (b<0)
+           then build_string ic (cat acc (String.make 1 c)) 0
+             else
+               if (b mod 3 == 0)
              then build_string ic (cat acc (String.make 1 c)) (b+1)
              else
                if (b mod 3 == 1)
                then build_string ic (cat acc (String.make 1 c)) b
                else build_string ic (cat acc (String.make 1 c)) b
-    | '*' -> if (b mod 3 == 0)
+    | '*' -> if (b<0)
+           then build_string ic (cat acc (String.make 1 c)) 0
+             else
+               if (b mod 3 == 0)
              then build_string ic (cat acc (String.make 1 c)) b
              else
                if (b mod 3 == 1)
-               then build_string ic (cat acc (String.make 1 c)) b
+               then build_string ic (cat acc (String.make 1 c)) (b+1)
                else build_string ic (cat acc (String.make 1 c)) (b-1)
-    | ')' -> if (b mod 3 == 0)
+    | ')' -> if (b<0)
+           then build_string ic (cat acc (String.make 1 c)) 0
+             else
+               if (b mod 3 == 0)
              then build_string ic (cat acc (String.make 1 c)) b
              else
                if (b mod 3 == 1)
