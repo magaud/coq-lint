@@ -67,6 +67,7 @@ let query_ast n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format 
 
 let query_goals n = cat "(Query ((sid " (cat (string_of_int n) ") (pp ((pp_format PpStr)))) Goals)")
 (*  let clean_string s = s*)
+(* clean_string fixes the encoding of special characters such as \n or \ *)
 let clean_string s = 
   let ls = String.length s in
   let rec clean_aux s i acc =
@@ -156,12 +157,17 @@ let connectives output subgoals newsubgoals lsubgoals =
     else 
       if (newsubgoals<>0) then output_string output " ; " else output_string output ""
   
+let output_string' x s =
+  let _ = Format.print_string (cat "Next line:" (cat s "\n")) in
+  output_string x s 
 
 let generate_proof_script fd_in fd_out nb result =
   let output = open_out result in
   let rec generate_proof_aux i nb subgoals lsubgoals =
     if (i>nb) then ()
     else
+      let _ = Format.print_string (cat "step #" (string_of_int i)) in
+      let _ = Format.print_string "\n" in 
       let string_to_send = query_ast i in
       let _ = Format.print_string string_to_send in
       let _ = Format.print_flush () in 
@@ -181,23 +187,36 @@ let generate_proof_script fd_in fd_out nb result =
       (*let _ = output_string output (clean_string st) in*)
       (*                let _ = output_string output "<SCRIPT" in*)
       (*                                output_string output "\n"  in *)
-      
+       
+      let _ = Format.print_string "st:" in 
       let _ = Format.print_string st in
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
       let string2 = query_goals i in 
+      let _ = Format.print_string string2 in
+let _ = Format.print_string "string2:" in 
       let _ = Format.print_string string2 in
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
       let _ = Unix.write_substring fd_out string2 0 (length string2) in
       let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
       let ans2 = retrieve_answer fd_in in
-
+(*      let _ = Format.print_string "ans:" in 
+      let _ = Format.print_string ans in
+      let _ = Format.print_string "ans2:" in 
+      let _ = Format.print_string ans2 in
+      let _ = Format.print_flush () in*)
+  
       let v2 = check_subterm ans2 "(ObjList((CoqString" in
       let st2 = if (v2<>[]) then
                 let p2 = (List.hd v2) in
                 read_from_until ans2 (p2+(ls+1)) (if (ans2.[p2+ls]=' ') then ')' else '\"')
                 else "IGNORE_GOALS" in
+      let _ = Format.print_string "\n" in 
+      let _ = Format.print_string "st2:" in 
+      let _ = Format.print_string st2 in
+      let _ = Format.print_flush () in
+      let _ = Format.print_string "\n" in 
       (*let _ = output_string output "GOALS>" in 
         let _ = output_string output (clean_string st2) in
         let _ = output_string output "<GOALS" in*)
@@ -222,7 +241,7 @@ let generate_proof_script fd_in fd_out nb result =
               else
                 let os_aux = if (upper_case st) then (clean_string st) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
                 (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
-                let _ = output_string output os_aux in
+                let _ = output_string' output os_aux in
                 let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
 
                (*   if ((newsubgoals>subgoals) && (not (upper_case st)))
@@ -235,7 +254,7 @@ let generate_proof_script fd_in fd_out nb result =
                                else output_string output " ]"
                           else
                             if (not (upper_case st)) then output_string output " ;2 " else () in*)
-                                let _ = if ((newsubgoals=0) && (not (upper_case st)))then output_string output ".\n" else () in 
+                                let _ = if ((newsubgoals=0) && (not (upper_case st)))then output_string' output ".\n" else () in 
                 if (upper_case st) then output_string output "\n" else () in 
   (*                let _ = output_string output (string_of_int (nb_goals)) in *)
   (*output_string output (clean_string st2) *)
@@ -244,7 +263,8 @@ let generate_proof_script fd_in fd_out nb result =
   
   (*      let _ = output_string output (make 1 '\n') in *)
   (* let _ = output_string output ans2 in*)
-      
+      let _ = Format.print_string (cat "end of step #" (string_of_int i)) in
+      let _ = Format.print_string "\n" in 
       generate_proof_aux (i+1) nb newsubgoals newlsubgoals
   in generate_proof_aux 1 nb 0 []
 
@@ -252,6 +272,58 @@ let generate_proof_script fd_in fd_out nb result =
 (* build_string returns a Coq sentence - a sentence which finishes with ". " *)
 (* without taking into account comments *)
 let rec build_string ic acc b =
+  try
+    let c = input_char ic in
+        let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
+
+    match c with
+      '(' -> if (b mod 3 == 0)
+             then build_string ic (cat acc (String.make 1 c)) (b+1)
+             else
+               if (b mod 3 == 1)
+               then build_string ic (cat acc (String.make 1 c)) b
+               else build_string ic (cat acc (String.make 1 c)) b
+    | '*' -> if (b mod 3 == 0)
+             then build_string ic (cat acc (String.make 1 c)) b
+             else
+               if (b mod 3 == 1)
+               then build_string ic (cat acc (String.make 1 c)) b
+               else build_string ic (cat acc (String.make 1 c)) (b-1)
+    | ')' -> if (b mod 3 == 0)
+             then build_string ic (cat acc (String.make 1 c)) b
+             else
+               if (b mod 3 == 1)
+               then build_string ic (cat acc (String.make 1 c)) (b-1)
+               else build_string ic (cat acc (String.make 1 c)) b
+    | '.' -> if (b == 0)
+             then build_string ic (cat acc (String.make 1 c)) (-1)
+             else build_string ic (cat acc (String.make 1 c)) b
+    | ' ' | '\n'  | '\t'  | '}' ->
+       if (b == -1)
+       then cat acc (String.make 1 c)
+       else
+         if (b mod 3 == 0)
+         then build_string ic (cat acc (String.make 1 c)) b
+         else
+           if (b mod 3 == 1) 
+           then build_string ic (cat acc (String.make 1 c)) b
+           else build_string ic (cat acc (String.make 1 c)) b
+    | _ -> if (b<0)
+           then build_string ic (cat acc (String.make 1 c)) 0
+           else 
+       if (b mod 3 == 0)
+           then build_string ic (cat acc (String.make 1 c)) b
+           else
+             if (b mod 3 == 1) 
+             then build_string ic (cat acc (String.make 1 c)) (b-1)
+             else build_string ic (cat acc (String.make 1 c)) b
+             
+  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
+
+
+(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
+(* without taking into account comments *)
+(*let rec build_string ic acc b =
   try
     let c = input_char ic in
 (*let _ = if (c='\\') then print_string "BUG" else print_char c in
@@ -268,7 +340,7 @@ let _ = print_string "-"in *)
       then cat acc (String.make 1 c)
       else build_string ic (cat acc (String.make 1 c)) (not b)
   with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
-
+ *)
  
 let rec remove_structure_in_string s =
   if ((s=empty))(*||(s.[0]='\n'))*)
@@ -284,10 +356,10 @@ let rec remove_structure_in_string s =
       else s
 
 let rec read_eval_print ic fd_in fd_out nb_iter result =
-  let output = open_out result in 
+  (*  let output = open_out result in *)
   let rec read_eval_print_aux ic fd_in fd_out nb_iter =  
-    try let s' = (build_string ic empty true) in
-        let _ = Format.print_string s' in 
+    try let s' = (build_string ic empty 0) in
+        (*      let _ = Format.print_string s' in *)
         let s  = remove_structure_in_string s' in 
         let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
         
@@ -309,17 +381,15 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (*let _ = Format.print_string ":" in*)
       let _ = Format.print_flush () in 
       (* print the "s" into a new file *)
-      let _ = if (upper_case s) then output_string output s else () in 
+      let _ = Format.print_string "s: " in 
+      let _ = Format.print_string s in
+      let _ = Format.print_flush () in 
+      (*      let _ = if (upper_case s) then output_string output (cat "uppercase" s) else () in *)
       read_eval_print_aux ic fd_in fd_out (nb_iter+1)
-    with  _ (* Bad file descriptor exception *) -> (*let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in*) nb_iter  in
+    with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in nb_iter  in
   read_eval_print_aux ic fd_in fd_out nb_iter
 
-(*
-let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in 
-let  answer = (Bytes.create 10000) in 
-let _ = read fd_in answer 0 10000 in 
-Format.print_string (Bytes.to_string answer)
- *)
+
 let main () =
 let _ = print_string "-*- Starting up coq-lint (alpha version: Fri May 26 17:26:21 CEST 2023) -*-\n" in
 let nb_args = Array.length Sys.argv - 1 in 
@@ -377,6 +447,9 @@ let nb = read_eval_print ic main_reading_end main_writing_end 0 vfile in
 
 let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
 let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
+let _ = Format.print_string "running generate for this number of steps:" in 
+let _ = Format.print_string (string_of_int nb) in
+let _ = Format.print_string "\n" in 
 let _ = generate_proof_script main_reading_end main_writing_end nb vfile in 
 let _ = kill pid 15 in 
 (*let _ = Format.print_string (string_of_int nb) in *)
@@ -397,9 +470,6 @@ let _ = read_eval_print ic stdin main_writing_end in
 
 
 main ();;
-(* add a wait in the parent to synchronize the exits *)
-
-
 
 (*let ic = open_in filename in
 let () =
