@@ -211,7 +211,7 @@ let generate_proof_script fd_in fd_out nb result acc =
                  let p = (List.hd v) in
                  read_from_until ans (p+(ls+1)) (if (ans.[p+ls]=' ') then ')' else '\"')
                else
-                 "IGNORE_AST" (* (cat "IGNORE_AST" s) *) in 
+                 if (i==1) then "IGNORE_AST" else ans (*"IGNORE_AST"*) in 
       (*                let _ = output_string output "SCRIPT>" in*)
       (*let _ = output_string output (clean_string st) in*)
       (*                let _ = output_string output "<SCRIPT" in*)
@@ -434,7 +434,7 @@ let _ = Format.print_string "<-\n" in
       let _ = Format.print_flush () in 
       (* print the "s" into a new file *)
       (*      let _ = if (upper_case s) then output_string output (cat "uppercase" s) else () in *)
-      read_eval_print_aux ic fd_in fd_out (nb_iter+1) (acc@[s])
+      read_eval_print_aux ic fd_in fd_out (nb_iter+1) (acc@[s'])
     with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat (cat "#steps:" (string_of_int nb_iter)) "\n") in
                                                    (nb_iter,acc)  in
   read_eval_print_aux ic fd_in fd_out nb_iter []
