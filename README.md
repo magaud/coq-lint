@@ -35,6 +35,6 @@ Transform a proof script into an equivalent (multi-tactics) single-line proof!
 * remove - and * and + when reading the initial file
 
 
-* tactics can not start with a capital letter CopR -> copR ?
+* tactics should not start with a capital letter CopR -> copR ?
 
 

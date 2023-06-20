@@ -100,6 +100,14 @@ let upper_case s =
     c='A' || c='B' || c='C'|| c='D'|| c='E'|| c='F' || c='G' || c='H' || c='I' || c='J' || c='K' ||c='L'|| c='M' ||
       c='N' || c='O'|| c='P'|| c='Q'|| c='R' || c='S' || c='T' || c='U' || c='V' || c='W' ||c='X'|| c='Y' || c='Z'
 
+let lower_case s =
+  if (s=empty)
+  then false
+  else 
+    let c = s.[0] in
+    c='a' || c='b' || c='c'|| c='d'|| c='e'|| c='f' || c='g' || c='h' || c='i' || c='j' || c='k' ||c='l'|| c='m' ||
+      c='n' || c='o'|| c='p'|| c='q'|| c='r' || c='s' || c='t' || c='u' || c='v' || c='w' ||c='x'|| c='y' || c='z'
+
 let remove_trailing_dot s = if (s=empty) then s else 
   let l=length s in 
   if s.[l-1]='.' then sub s 0 (l-1) else s
@@ -156,27 +164,48 @@ let connectives output subgoals newsubgoals lsubgoals =
     then closes_all output subgoals newsubgoals lsubgoals
     else 
       if (newsubgoals<>0) then output_string output " ; " else output_string output ""
-  
+
+let rec remove_structure_in_string s =
+  if ((s=empty))(*||(s.[0]='\n'))*)
+  then s
+  else
+    if (s.[0]=' ')
+    then
+      remove_structure_in_string (sub s 1 ((String.length s)-1))
+    else
+      if ((s.[0]='+')||(s.[0]='-')||(s.[0]='*'))
+      then
+        (sub s 1 ((String.length s)-1))
+      else s
+ 
 let output_string' x s =
-  let _ = Format.print_string (cat "Next line:" (cat s "\n")) in
+  (*  let _ = Format.print_string (cat "Next line:" (cat s "\n")) in  *)
   output_string x s 
 
-let generate_proof_script fd_in fd_out nb result =
+(* is_tactic checks whether the string correspond to a tactic *)
+let is_tactic s =
+  let s' = remove_structure_in_string s in
+  (not (upper_case s'))
+  
+  
+let generate_proof_script fd_in fd_out nb result acc =
   let output = open_out result in
-  let rec generate_proof_aux i nb subgoals lsubgoals =
+  let rec generate_proof_aux i nb subgoals lsubgoals acc =
     if (i>nb) then ()
     else
-      let _ = Format.print_string (cat "step #" (string_of_int i)) in
-      let _ = Format.print_string "\n" in 
+
+        let _ = Format.print_string (cat "step #" (string_of_int i)) in
+        let _ = Format.print_string "\n" in
       let string_to_send = query_ast i in
       let _ = Format.print_string string_to_send in
       let _ = Format.print_flush () in 
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
       let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
       let ans = retrieve_answer fd_in in
-
       let ls = length "(ObjList((CoqString" in 
       let v = check_subterm ans "(ObjList((CoqString" in
+      let _ = Format.print_string (cat "ans:" ans) in
+      let _ = Format.print_flush () in
       let st = if (v<>[])
                then
                  let p = (List.hd v) in
@@ -189,12 +218,15 @@ let generate_proof_script fd_in fd_out nb result =
       (*                                output_string output "\n"  in *)
        
       let _ = Format.print_string "st:" in 
+      let _ = if (is_tactic st) then Format.print_string (cat "tactic:" st) else let _ = Format.print_string "command:" in Format.print_string (List.hd acc) in 
+      let _ = Format.print_string "realst:" in 
       let _ = Format.print_string st in
+
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
       let string2 = query_goals i in 
-      let _ = Format.print_string string2 in
-let _ = Format.print_string "string2:" in 
+      (*      let _ = Format.print_string string2 in*)
+      (*let _ = Format.print_string "string2:" in *)
       let _ = Format.print_string string2 in
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
@@ -212,20 +244,13 @@ let _ = Format.print_string "string2:" in
                 let p2 = (List.hd v2) in
                 read_from_until ans2 (p2+(ls+1)) (if (ans2.[p2+ls]=' ') then ')' else '\"')
                 else "IGNORE_GOALS" in
+      (*
       let _ = Format.print_string "\n" in 
       let _ = Format.print_string "st2:" in 
       let _ = Format.print_string st2 in
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
-      (*let _ = output_string output "GOALS>" in 
-        let _ = output_string output (clean_string st2) in
-        let _ = output_string output "<GOALS" in*)
-      (*                let _ = output_string output (cat (make 1 '%') (cat (make 1 st2.[6]) (make 1 '%'))) in *)
-      (*                let w = check_barre st2 20 27 in if (w) then let _ = output_string output "HERE" in *)
-      (*           let xx = clean_string st2 in 
-                   let _ = display_string_char xx in*)
-      (*      let _ = output_string output (clean_string st) in *)
-      (*                let _ = output_string output "\n" in *)
+      *)
       let newsubgoals =
         if ((st2<>"IGNORE_GOALS"))(* && (not (upper_case st)))*)
         then List.length (number_of_goals ((*(clean_string*) st2) 0 [])
@@ -239,8 +264,10 @@ let _ = Format.print_string "string2:" in
       let _ = if  (st="IGNORE_AST")
               then  ()
               else
-                let os_aux = if (upper_case st) then (clean_string st) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
+                let os_aux = if (not (is_tactic st)) (*(upper_case st)*) then (List.hd acc) (*(clean_string st)*) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
                 (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
+                let _ = Format.print_string (cat "out:" os_aux) in
+                let _ = Format.print_flush () in 
                 let _ = output_string' output os_aux in
                 let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
 
@@ -255,27 +282,20 @@ let _ = Format.print_string "string2:" in
                           else
                             if (not (upper_case st)) then output_string output " ;2 " else () in*)
                                 let _ = if ((newsubgoals=0) && (not (upper_case st)))then output_string' output ".\n" else () in 
-                if (upper_case st) then output_string output "\n" else () in 
-  (*                let _ = output_string output (string_of_int (nb_goals)) in *)
-  (*output_string output (clean_string st2) *)
-  (*                let nb_goals = List.length (number_of_goals st2 0 []) in 
-                    output_string output (string_of_int nb_goals) in *)
-  
-  (*      let _ = output_string output (make 1 '\n') in *)
-  (* let _ = output_string output ans2 in*)
+                                (*if (upper_case st) then output_string output "\n" else*) () in 
       let _ = Format.print_string (cat "end of step #" (string_of_int i)) in
       let _ = Format.print_string "\n" in 
-      generate_proof_aux (i+1) nb newsubgoals newlsubgoals
-  in generate_proof_aux 1 nb 0 []
+      generate_proof_aux (i+1) nb newsubgoals newlsubgoals (List.tl acc)
+  in generate_proof_aux 1 nb 0 [] ("VIGNORE_AST"::acc)
 
-
-(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
-(* without taking into account comments *)
+(* build_string returns a Coq sentence -
+   a sentence which finishes with ". " taking comments into account *)
 let rec build_string ic acc b =
   try
     let c = input_char ic in
-        let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
-
+    (*
+      let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
+     *)
     match c with
       '(' -> if (b<0)
            then build_string ic (cat acc (String.make 1 c)) 0
@@ -326,54 +346,77 @@ let rec build_string ic acc b =
              if (b mod 3 == 1) 
              then build_string ic (cat acc (String.make 1 c)) (b-1)
              else build_string ic (cat acc (String.make 1 c)) b
-             
   with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
 
 
-(* build_string returns a Coq sentence - a sentence which finishes with ". " *)
-(* without taking into account comments *)
-(*let rec build_string ic acc b =
-  try
-    let c = input_char ic in
-(*let _ = if (c='\\') then print_string "BUG" else print_char c in
-let _ = print_string "-"in *)
-    if b 
-    then (* not looking at the second character *)
-      if (c='.')
-      then build_string ic (cat acc (String.make 1 c)) (not b)
-      else build_string ic (cat acc (String.make 1 c)) b
-    else
-      (*if (c='\\') then let d = input_char ic in let _ = print_string (String.make 1 d) in build_string ic (cat acc (String.make 1 '\\')) b else *)
-      (* checking what the next character is *)
-      if ((c==' ')||(c=='\n')||(c=='\t')||(c=='}'))
-      then cat acc (String.make 1 c)
-      else build_string ic (cat acc (String.make 1 c)) (not b)
-  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
+
+let rec list_char_to_string l =
+  match l with
+    [] -> empty
+  | x::xs -> if (x='\\')
+             then cat (make 1 '\\') (list_char_to_string xs)
+             else cat (make 1 x) (list_char_to_string xs)
+
+let rec string_to_list_char s =
+  if(s=empty) then [] else s.[0]::(string_to_list_char (sub s 1 (length(s)-1)))
+
+let rec next_is c s =
+  (not (s=[])) && (List.hd s==c)
+     
+(*let rec remove_comments_aux s acc =
+  match match s with
+          [] -> acc
+        | x::xs ->
+           match x with
+             '(' -> if (next_is '*' xs)
+                    then remove_comments_aux (List.tl xs) acc
+                    else remove_comments_aux xs (acc@['('])
+           | '*' ->
+           | ')' ->
+           | c -> 
  *)
- 
-let rec remove_structure_in_string s =
-  if ((s=empty))(*||(s.[0]='\n'))*)
-  then s
-  else
-    if (s.[0]=' ')
-    then
-      remove_structure_in_string (sub s 1 ((String.length s)-1))
-    else
-      if ((s.[0]='+')||(s.[0]='-')||(s.[0]='*'))
-      then
-        (sub s 1 ((String.length s)-1))
-      else s
+let rec remove_comments_aux s n acc =
+  match s with
+    [] -> acc
+  | x::xs ->
+     (*  let _ = Format.print_string (cat (string_of_int n) (cat  ":" (String.make 1 x))) in let _ = Format.print_flush () in *)
+     match x with '(' ->
+                   if(n==0)
+                   then if (next_is '*' xs)
+                        then remove_comments_aux (List.tl xs) (n+1) acc
+                        else remove_comments_aux xs n (acc@['('])
+                   else remove_comments_aux xs n acc
+                | '*' ->
+                   if(n>0)
+                   then if (next_is ')' xs)
+                        then remove_comments_aux (List.tl xs) (n-1) acc
+                        else remove_comments_aux xs n acc
+                   else
+                     remove_comments_aux xs n (acc@['*'])
+                | ')' ->
+                   if(n==0)
+                   then remove_comments_aux xs n (acc@[')'])
+                   else remove_comments_aux xs n (acc)
+                | c -> if (n==0)
+                       then remove_comments_aux xs n (acc@[c])
+                       else remove_comments_aux xs n acc
+
+let remove_comments s = list_char_to_string (remove_comments_aux (string_to_list_char s) 0 [])
 
 let rec read_eval_print ic fd_in fd_out nb_iter result =
   (*  let output = open_out result in *)
-  let rec read_eval_print_aux ic fd_in fd_out nb_iter =  
+  let rec read_eval_print_aux ic fd_in fd_out nb_iter acc =  
     try let s' = (build_string ic empty 0) in
-        (*      let _ = Format.print_string s' in *)
-        let s  = remove_structure_in_string s' in 
+        let _ = Format.print_string (cat "s':" s') in
+        let _ = Format.print_string "\n" in 
+        let _ = Format.print_string (cat "s'(without comments):" (remove_comments  s')) in
+        let _ = Format.print_string "\n" in 
+        let s  = remove_structure_in_string (remove_comments s') in 
         let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
-        
-        let _ = Format.print_string s (*(cat (string_of_int nb_iter) string_to_send)*) in
-        let _ = Format.print_string string_to_send (*(cat (string_of_int nb_iter) string_to_send)*) in
+let _ = Format.print_string "->" in 
+let _ = Format.print_string s in
+let _ = Format.print_string "<-\n" in 
+        (*        let _ = Format.print_string string_to_send in*)
       let _ = Format.print_flush () in 
       (* let _ = Format.print_string string_to_send in*)
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
@@ -390,81 +433,82 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
       (*let _ = Format.print_string ":" in*)
       let _ = Format.print_flush () in 
       (* print the "s" into a new file *)
-      let _ = Format.print_string "s: " in 
-      let _ = Format.print_string s in
-      let _ = Format.print_flush () in 
       (*      let _ = if (upper_case s) then output_string output (cat "uppercase" s) else () in *)
-      read_eval_print_aux ic fd_in fd_out (nb_iter+1)
-    with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat "#steps:" (string_of_int nb_iter)) in nb_iter  in
-  read_eval_print_aux ic fd_in fd_out nb_iter
+      read_eval_print_aux ic fd_in fd_out (nb_iter+1) (acc@[s])
+    with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat (cat "#steps:" (string_of_int nb_iter)) "\n") in
+                                                   (nb_iter,acc)  in
+  read_eval_print_aux ic fd_in fd_out nb_iter []
 
 
 let main () =
-let _ = print_string "-*- Starting up coq-lint (alpha version: Fri May 26 17:26:21 CEST 2023) -*-\n" in
-let nb_args = Array.length Sys.argv - 1 in 
-let _ = if (nb_args<1) then
-          let _ = print_string (cat "usage: " (cat Sys.argv.(0) " <input.v> [ -o <output.v> ]\n")) in exit(1) in 
-let _ = for i = 0 to nb_args do
-Printf.printf "[%i] %s\n" i Sys.argv.(i) done in
-let filename = Sys.argv.(1) in
-(*let _ = Format.print_string filename in*)
-(*let _ = print_newline () in*)
-let output_file = if ((nb_args>=3) && Sys.argv.(2)="-o") then Sys.argv.(3) else "one_liner.v" in 
-let _ = print_string (cat "NEW FILE:" output_file) in
-let _ = print_newline () in
-let ic = open_in filename in
-(*let _ = reader ic in *)
-let (sertop_reading_end, main_writing_end) = Unix.pipe () in (* sending info to serapi *)
-let (main_reading_end, sertop_writing_end) = Unix.pipe () in (* receiving info from serapi *)
-let _ = Unix.set_nonblock main_reading_end in 
-let pid = fork () in
+  let _ = print_string "-*- Starting up coq-lint (alpha version: Thu Jun  8 15:58:23 CEST 2023) -*-\n" in
+  let _ = Format.print_flush () in 
+  let nb_args = Array.length Sys.argv - 1 in 
+  let _ = if (nb_args<1) then
+            let _ = print_string (cat "usage: " (cat Sys.argv.(0) " <input.v> [ -o <output.v> ]\n")) in exit(1) in 
+(*  let _ = for i = 0 to nb_args do
+            Printf.printf "[%i] %s " i Sys.argv.(i) done in
+  let _ = Format.print_string "\n" in *)
+  let filename = Sys.argv.(1) in
+  (*let _ = Format.print_string filename in*)
+  (*let _ = print_newline () in*)
+  let output_file = if ((nb_args>=3) && Sys.argv.(2)="-o") then Sys.argv.(3) else "one_liner.v" in 
+  let _ = print_string (cat "NEW FILE:" output_file) in
+  let _ = print_newline () in
+  let ic = open_in filename in
+  (*let _ = reader ic in *)
+  let (sertop_reading_end, main_writing_end) = Unix.pipe () in (* sending info to serapi *)
+  let (main_reading_end, sertop_writing_end) = Unix.pipe () in (* receiving info from serapi *)
+  let _ = Unix.set_nonblock main_reading_end in 
+  let pid = fork () in
+  
+  if (pid==0) then
+    (* child - an instance of sertop *)
+    let _ = close main_reading_end in
+    let _ = close main_writing_end in
+    let _ = dup2 sertop_reading_end stdin in 
+    let _ = dup2 sertop_writing_end stdout in
+    let _ = close sertop_reading_end in
+    let _ = close sertop_writing_end in 
+    (*let _  = Format.print_string "ok-child" in *)
+    let current_dir = Sys.getcwd() in
+    let option1 = "-R" in 
+    let option2 = (cat current_dir ",GeoCoq") in 
+    let _ = (*Format.print_string "wait" *)execvp "sertop" [| "sertop" ; option1; option2 (*; "--printer=human"*)|] in
+    let _ = Format.print_string "oops\n" in
+    (*let w = (Bytes.create 26) in 
+      let  _ = read sertop_reading_end w 0 26 in
+      let  _ = Format.print_string (Bytes.to_string w) in*)
+    ()
 
-if (pid==0) then
-(* child - an instance of sertop *)
-let _ = close main_reading_end in
-let _ = close main_writing_end in
-let _ = dup2 sertop_reading_end stdin in 
-let _ = dup2 sertop_writing_end stdout in
-let _ = close sertop_reading_end in
-let _ = close sertop_writing_end in 
-(*let _  = Format.print_string "ok-child" in *)
-let current_dir = Sys.getcwd() in
-let option1 = "-R" in 
-let option2 = (cat current_dir ",GeoCoq") in 
-let _ = (*Format.print_string "wait" *)execvp "sertop" [| "sertop" ; option1; option2 (*; "--printer=human"*)|] in
-let _ = Format.print_string "oops\n" in
-(*let w = (Bytes.create 26) in 
-let  _ = read sertop_reading_end w 0 26 in
-let  _ = Format.print_string (Bytes.to_string w) in*)
-()
-
-else
-(* parent - our main program *)
-(* useless ends *)
-let _ = close sertop_reading_end in
-let _ = close sertop_writing_end in
-(* duplications *)
-(*let _ = dup2 main_reading_end stdin in *)
-(*let _ = dup2 main_writing_end stdout in*)
-(* closing duplicated ends *)
-(*let _ = close main_reading_end in*)
-(*let _ = close main_writing_end in*)
-
-(*let _  = Format.print_string "ok-parent" in*)
-let vfile = output_file in (*cat "translated_files/" (Filename.basename Sys.argv.(1)) in *)
-let nb = read_eval_print ic main_reading_end main_writing_end 0 vfile in
-
-let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
-let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
-let _ = Format.print_string "running generate for this number of steps:" in 
-let _ = Format.print_string (string_of_int nb) in
-let _ = Format.print_string "\n" in 
-let _ = generate_proof_script main_reading_end main_writing_end nb vfile in 
-let _ = kill pid 15 in 
-(*let _ = Format.print_string (string_of_int nb) in *)
-let _ = wait () in 
-let _ = Format.print_string "-*- end of execution -*-\n" in
-Format.print_flush ()
+  else
+    (* parent - our main program *)
+    (* useless ends *)
+    let _ = close sertop_reading_end in
+    let _ = close sertop_writing_end in
+    (* duplications *)
+    (*let _ = dup2 main_reading_end stdin in *)
+    (*let _ = dup2 main_writing_end stdout in*)
+    (* closing duplicated ends *)
+    (*let _ = close main_reading_end in*)
+    (*let _ = close main_writing_end in*)
+    
+    (*let _  = Format.print_string "ok-parent" in*)
+    let vfile = output_file in (*cat "translated_files/" (Filename.basename Sys.argv.(1)) in *)
+    let (nb,acc) = read_eval_print ic main_reading_end main_writing_end 0 vfile in
+    
+    let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
+    let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
+(*    let _ = Format.print_string "running generate for this number of steps:" in 
+    let _ = Format.print_string (string_of_int nb) in
+    let _ = Format.print_string "\n" in *)
+    let _ = Format.print_flush () in 
+    let _ = generate_proof_script main_reading_end main_writing_end nb vfile acc in 
+    let _ = kill pid 15 in 
+    (*let _ = Format.print_string (string_of_int nb) in *)
+    let _ = wait () in 
+    let _ = Format.print_string "-*- end of execution -*-\n" in
+    Format.print_flush ()
 ;;
 (*
 let s = build_string ic empty in
