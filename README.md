@@ -38,3 +38,10 @@ Transform a proof script into an equivalent (multi-tactics) single-line proof!
 * tactics should not start with a capital letter CopR -> copR ?
 
 
+# EXAMPLES
+
+- and_or_distrib.v
+- example2.v
+- bar.v (already factorized, no changes)
+- Cantor.v
+- GeoCoq/Highschool/orthospecial.v (should be GeoCoq/Highschool/orthocenter.v soon)

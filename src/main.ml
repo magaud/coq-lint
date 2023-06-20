@@ -363,36 +363,30 @@ let rec string_to_list_char s =
 let rec next_is c s =
   (not (s=[])) && (List.hd s==c)
      
-(*let rec remove_comments_aux s acc =
-  match match s with
-          [] -> acc
-        | x::xs ->
-           match x with
-             '(' -> if (next_is '*' xs)
-                    then remove_comments_aux (List.tl xs) acc
-                    else remove_comments_aux xs (acc@['('])
-           | '*' ->
-           | ')' ->
-           | c -> 
- *)
+
 let rec remove_comments_aux s n acc =
   match s with
     [] -> acc
   | x::xs ->
      (*  let _ = Format.print_string (cat (string_of_int n) (cat  ":" (String.make 1 x))) in let _ = Format.print_flush () in *)
      match x with '(' ->
-                   if(n==0)
-                   then if (next_is '*' xs)
-                        then remove_comments_aux (List.tl xs) (n+1) acc
-                        else remove_comments_aux xs n (acc@['('])
-                   else remove_comments_aux xs n acc
-                | '*' ->
-                   if(n>0)
-                   then if (next_is ')' xs)
-                        then remove_comments_aux (List.tl xs) (n-1) acc
-                        else remove_comments_aux xs n acc
+                   if (next_is '*' xs)
+                   then remove_comments_aux (List.tl xs) (n+1) acc
                    else
-                     remove_comments_aux xs n (acc@['*'])
+                     if (n>0)
+                     then remove_comments_aux xs n (acc)
+                     else remove_comments_aux xs n (acc@['('])
+                | '*' ->
+                   (*if(n>0)
+                   then *)
+                   if (next_is ')' xs)
+                   then if (n>0)
+                        then remove_comments_aux (List.tl xs) (n-1) acc
+                        else remove_comments_aux xs n  acc
+                   else if (n>0)
+                   then remove_comments_aux xs n acc
+                   else remove_comments_aux xs n (acc@['*'])
+
                 | ')' ->
                    if(n==0)
                    then remove_comments_aux xs n (acc@[')'])
