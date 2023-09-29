@@ -512,13 +512,13 @@ let remove_comments s = list_char_to_string (remove_comments_aux (string_to_list
 let rec read_eval_print ic fd_in fd_out nb_iter result =
   let rec read_eval_print_aux ic fd_in fd_out nb_iter acc =  
     try let raw_string = (build_string ic empty '\n' 0) in
-        if (raw_string=empty) then read_eval_print_aux ic fd_in fd_out (nb_iter) (acc)
+        if ((raw_string=empty) || (raw_string="\n")) then read_eval_print_aux ic fd_in fd_out (nb_iter) (acc)
         else
-          (*let _ = Format.print_string (cat "raw_string:" (cat raw_string ":\n")) in*)
+          let _ = Format.print_string (cat "raw_string:" (cat raw_string ":\n")) in
           let string_wo_comments = (remove_comments  raw_string) in 
-          (*let _ = Format.print_string (cat "string_wo_comments:" (cat string_wo_comments ":\n")) in*)
+          let _ = Format.print_string (cat "string_wo_comments:" (cat string_wo_comments ":\n")) in
           let string_wo_structure  = remove_structure_in_string string_wo_comments in
-          (*let _ = Format.print_string (cat "string_wo_structure:" (cat string_wo_structure ":\n")) in*)
+          let _ = Format.print_string (cat "string_wo_structure:" (cat string_wo_structure ":\n")) in
           
           let string_to_send = (*if (raw_string=empty) then "(Add () \" Check nat.\")" else*) cat ("(Add () \"") (cat string_wo_structure "\")") in
           (*        let _ = Format.print_string (cat "->" (cat string_wo_structure "<-\n")) in *)
@@ -546,8 +546,9 @@ let rec read_eval_print ic fd_in fd_out nb_iter result =
 
 
 let main () =
-  let _ = print_string "-*- Starting up coq-lint (alpha version: Fri Sep 29 15:08:32 CEST 2023, compatible with Coq 8.17.1) -*-\n" in
-let _ = print_string "*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*\n" in 
+  let _ = print_string "--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--\n" in 
+  let _ = print_string "--*-- Starting up coq-lint (alpha version: Fri Sep 29 15:08:32 CEST 2023, compatible with Coq 8.17.1) --*--\n" in
+  let _ = print_string "--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--\n" in 
   let _ = Format.print_flush () in 
   let nb_args = Array.length Sys.argv - 1 in 
   let _ = if (nb_args<1) then
@@ -609,7 +610,7 @@ let _ = print_string "*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*
     let _ = Format.print_string (string_of_int nb) in
     let _ = Format.print_string "\n" in *)
     let _ = Format.print_flush () in
-    let _ = Unix.sleepf (1.) in (* random value to leave time for serapi to answer *)
+    let _ = Unix.sleepf (1./4.) in (* random value to leave time for serapi to answer *)
     let _ = generate_proof_script main_reading_end main_writing_end nb vfile acc in 
     let _ = kill pid 15 in 
     (*let _ = Format.print_string (string_of_int nb) in *)
