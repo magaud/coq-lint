@@ -92,7 +92,7 @@ let clean_string s =
   
   in display_aux s ((String.length s) -1)
 *)
-let upper_case s =
+(*let upper_case s =
   if (s=empty)
   then false
   else 
@@ -107,7 +107,7 @@ let lower_case s =
     let c = s.[0] in
     c='a' || c='b' || c='c'|| c='d'|| c='e'|| c='f' || c='g' || c='h' || c='i' || c='j' || c='k' ||c='l'|| c='m' ||
       c='n' || c='o'|| c='p'|| c='q'|| c='r' || c='s' || c='t' || c='u' || c='v' || c='w' ||c='x'|| c='y' || c='z'
-
+ *)
 let remove_trailing_dot s = if (s=empty) then s else 
   let l=length s in 
   if s.[l-1]='.' then sub s 0 (l-1) else s
@@ -134,7 +134,7 @@ let rec split s t acc =
 in split s t empty
   
 let my_secure_merge t1 t2 li =
-  cat t1 (cat li (cat "(" (cat ( remove_trailing_dot t2) ").")))
+  (cat "(" (cat t1 (cat li  (cat (remove_trailing_dot t2) ")."))))
 
 let full_split s t =
   let l = split_on_string s t in
@@ -169,7 +169,8 @@ let rec remove_structure_in_string s =
   if ((s=empty))(*||(s.[0]='\n'))*)
   then s
   else
-    if (s.[0]=' ')
+    (*    let _ = Format.print_string (cat "^" (cat (make 1 s.[0]) "^")) in *)
+    if ((s.[0]=' ') || (s.[0]='\n')  || (s.[0]='\t') || (s.[0]='\r'))
     then
       remove_structure_in_string (sub s 1 ((String.length s)-1))
     else
@@ -183,10 +184,15 @@ let output_string' x s =
   output_string x s 
 
 (* is_tactic checks whether the string correspond to a tactic *)
-let is_tactic s =
+(*let is_tactic s =
   let s' = remove_structure_in_string s in
   (not (upper_case s'))
-  
+ *)
+
+let is_command s =
+  let commands_list = ["Corollary";"Lemma";"Proof";"Qed";"Require";"Section";"End" ;"Definition";"Context";"Check";"Print";"Ltac";"IGNORE_AST"; "IGNORE_GOALS"; "#[global]"] in 
+  let s' = remove_structure_in_string s in
+  List.fold_left (fun b t -> b||starts_with ~prefix:t s') false commands_list
   
 let generate_proof_script fd_in fd_out nb result acc =
   let output = open_out result in
@@ -194,13 +200,13 @@ let generate_proof_script fd_in fd_out nb result acc =
     if (i>nb) then ()
     else
 
-        let _ = Format.print_string (cat "step #" (string_of_int i)) in
-        let _ = Format.print_string "\n" in
+      let _ = Format.print_string (cat "step #" (string_of_int i)) in
+      let _ = Format.print_string "\n" in
       let string_to_send = query_ast i in
       let _ = Format.print_string string_to_send in
       let _ = Format.print_flush () in 
       let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
-      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
+      let _ = Unix.sleepf (1./.4.) in (* random value to leave time for serapi to answer *)
       let ans = retrieve_answer fd_in in
       let ls = length "(ObjList((CoqString" in 
       let v = check_subterm ans "(ObjList((CoqString" in
@@ -218,7 +224,7 @@ let generate_proof_script fd_in fd_out nb result acc =
       (*                                output_string output "\n"  in *)
        
       let _ = Format.print_string "st:" in 
-      let _ = if (is_tactic st) then Format.print_string (cat "tactic:" st) else let _ = Format.print_string "command:" in Format.print_string (List.hd acc) in 
+      let _ = if (not (is_command st)) then Format.print_string (cat "tactic:" st) else let _ = Format.print_string "command:" in Format.print_string (List.hd acc) in 
       let _ = Format.print_string "realst:" in 
       let _ = Format.print_string st in
 
@@ -231,7 +237,7 @@ let generate_proof_script fd_in fd_out nb result acc =
       let _ = Format.print_flush () in
       let _ = Format.print_string "\n" in 
       let _ = Unix.write_substring fd_out string2 0 (length string2) in
-      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)
+      let _ = Unix.sleepf (1./.4.) in (* random value to leave time for serapi to answer *)
       let ans2 = retrieve_answer fd_in in
 (*      let _ = Format.print_string "ans:" in 
       let _ = Format.print_string ans in
@@ -264,12 +270,12 @@ let generate_proof_script fd_in fd_out nb result acc =
       let _ = if  (st="IGNORE_AST")
               then  ()
               else
-                let os_aux = if (not (is_tactic st)) (*(upper_case st)*) then (List.hd acc) (*(clean_string st)*) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
+                let os_aux = if (is_command st) (*not (is_tactic st))*) (*(upper_case st)*) then (List.hd acc) (*(clean_string st)*) else (strip_par_and_closing_dot (full_split (clean_string st) " by ")) in
                 (*                let os = if ((newsubgoals=0) && (not (upper_case st)))then (cat os_aux ".") else os_aux in *)
                 let _ = Format.print_string (cat "out:" os_aux) in
                 let _ = Format.print_flush () in 
                 let _ = output_string' output os_aux in
-                let _ = if (upper_case st) then () else connectives output subgoals newsubgoals lsubgoals in 
+                let _ = if (is_command st) then () else connectives output subgoals newsubgoals lsubgoals in 
 
                (*   if ((newsubgoals>subgoals) && (not (upper_case st)))
                         then
@@ -281,49 +287,151 @@ let generate_proof_script fd_in fd_out nb result acc =
                                else output_string output " ]"
                           else
                             if (not (upper_case st)) then output_string output " ;2 " else () in*)
-                                let _ = if ((newsubgoals=0) && (not (upper_case st)))then output_string' output ".\n" else () in 
+                let _ = if ((newsubgoals=0) && (not (is_command st)))then output_string' output ".\n" else () in (* XXX *)
                                 (*if (upper_case st) then output_string output "\n" else*) () in 
       let _ = Format.print_string (cat "end of step #" (string_of_int i)) in
       let _ = Format.print_string "\n" in 
       generate_proof_aux (i+1) nb newsubgoals newlsubgoals (List.tl acc)
-  in generate_proof_aux 1 nb 0 [] ("VIGNORE_AST"::acc)
+  in generate_proof_aux 1 (nb+1) 0 [] ("VIGNORE_AST"::acc)
 
 (* build_string returns a Coq sentence -
    a sentence which finishes with ". " taking comments into account *)
+
+(*let rec build_string_aux ic acc s =
+  let c = input_char ic in
+    (*  let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in *)
+      match c with '(' ->
+                    if (s=[])
+                    then build_string_aux ic  (cat acc (String.make 1 '(')) ('('::s)
+                    else
+                 | '*' ->
+                    build_string_aux ic  (cat acc (String.make 1 '*')) ('*'::s)
+                 | '.' ->
+                    if (s=[])
+                    then 
+                    else
+
+let d=input_char ic in 
+                    if (d=='*')
+                    then build_string ic (cat (cat acc (String.make 1 '(')) (String.make 1 '*')) (b+1)
+                    else build_string ic (cat (cat acc (String.make 1 '(')) (String.make 1 d)) b
+                | '*' ->
+                   let d=input_char ic in
+                   if (d==')')
+                   then build_string ic (cat (cat acc (String.make 1 '*')) (String.make 1 ')')) (b-1)
+                   else build_string ic (cat (cat acc (String.make 1 '*')) (String.make 1 d)) b
+                | '.' ->
+                   if (b=0)
+                   then
+                     let d=input_char ic in
+                     if ((d==' ')|| (d=='\n')|| (d== '\t')|| (d=='}'))
+                     then cat acc (cat (String.make 1 c) (String.make 1 d))
+                     else build_string ic (cat acc (cat (String.make 1 c) (String.make 1 d))) b
+                   else build_string ic (cat acc (String.make 1 c)) b
+                | c -> build_string ic (cat acc (String.make 1 c)) b
+
+  with End_of_file -> let _ = print_string (cat "X-->" (cat acc "<--X")) in close_in ic; acc*)
+
+
+(*let rec build_string ic acc b = build_string_aux ic acc []
+  try
+    let c = input_char ic in
+    (*  let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in *)
+      match c with '(' ->
+                    let d=input_char ic in 
+                    if (d=='*')
+                    then build_string ic (cat (cat acc (String.make 1 '(')) (String.make 1 '*')) (b+1)
+                    else build_string ic (cat (cat acc (String.make 1 '(')) (String.make 1 d)) b
+                | '*' ->
+                   let d=input_char ic in
+                   if (d==')')
+                   then build_string ic (cat (cat acc (String.make 1 '*')) (String.make 1 ')')) (b-1)
+                   else build_string ic (cat (cat acc (String.make 1 '*')) (String.make 1 d)) b
+                | '.' ->
+                   if (b=0)
+                   then
+                     let d=input_char ic in
+                     if ((d==' ')|| (d=='\n')|| (d== '\t')|| (d=='}'))
+                     then cat acc (cat (String.make 1 c) (String.make 1 d))
+                     else build_string ic (cat acc (cat (String.make 1 c) (String.make 1 d))) b
+                   else build_string ic (cat acc (String.make 1 c)) b
+                | c -> build_string ic (cat acc (String.make 1 c)) b
+
+  with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc*)
+
+
+  
+let rec build_string ic acc lc b =
+  try
+    let c = input_char ic in
+    
+    (*let _ = print_string (cat (string_of_int b) (cat ":" (make 1  c))) in *)
+    
+    match c with
+      '(' -> build_string ic (cat acc (String.make 1 c)) c b
+    | '*' -> if (lc='(')
+             then build_string ic (cat acc (String.make 1 c)) c (b+1)
+             else build_string ic (cat acc (String.make 1 c)) c b
+    | ')' -> if (lc='*')
+             then build_string ic (cat acc (String.make 1 c)) c (b-1)
+             else build_string ic (cat acc (String.make 1 c)) c b
+    | '.' -> if (b == 0)
+             then build_string ic (cat acc (String.make 1 c)) c (-1)
+             else  build_string ic (cat acc (String.make 1 c)) c b
+    | ' ' | '\n'  | '\t' | '\r' | '}' ->
+       if (b == -1)
+       then cat acc (String.make 1 c)
+       else build_string ic (cat acc (String.make 1 c)) c b
+    | _ ->
+       if (b == -1)
+       then build_string ic (cat acc (String.make 1 c)) c 0
+       else build_string ic (cat acc (String.make 1 c)) c b
+  with End_of_file -> (* let _ = print_string (cat "exn->" (cat acc "<-")) in *) close_in ic; (acc)
+  (*
 let rec build_string ic acc b =
   try
     let c = input_char ic in
-    (*
-      let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
-     *)
+
+       let _ = print_string (cat (string_of_int b) (cat ":" (make 1 c))) in 
+
     match c with
       '(' -> if (b<0)
            then build_string ic (cat acc (String.make 1 c)) 0
              else
-               if (b mod 3 == 0)
+               if (b mod 4 == 0)
              then build_string ic (cat acc (String.make 1 c)) (b+1)
              else
-               if (b mod 3 == 1)
+               if (b mod 4 == 1)
                then build_string ic (cat acc (String.make 1 c)) b
-               else build_string ic (cat acc (String.make 1 c)) b
+               else
+                 if (b mod 4 == 2)
+                 then build_string ic (cat acc (String.make 1 c)) b
+                 else build_string ic (cat acc (String.make 1 c)) b
     | '*' -> if (b<0)
            then build_string ic (cat acc (String.make 1 c)) 0
              else
-               if (b mod 3 == 0)
+               if (b mod 4 == 0)
              then build_string ic (cat acc (String.make 1 c)) b
              else
-               if (b mod 3 == 1)
+               if (b mod 4 == 1)
                then build_string ic (cat acc (String.make 1 c)) (b+1)
-               else build_string ic (cat acc (String.make 1 c)) (b-1)
+               else
+                 if (b mod 4 == 2)
+                 then build_string ic (cat acc (String.make 1 c)) (b+1)
+                 else build_string ic (cat acc (String.make 1 c)) b
     | ')' -> if (b<0)
            then build_string ic (cat acc (String.make 1 c)) 0
              else
-               if (b mod 3 == 0)
+               if (b mod 4 == 0)
              then build_string ic (cat acc (String.make 1 c)) b
              else
-               if (b mod 3 == 1)
+               if (b mod 4 == 1)
                then build_string ic (cat acc (String.make 1 c)) (b-1)
-               else build_string ic (cat acc (String.make 1 c)) b
+               else
+                 if (b mod 4 == 2)
+                 then build_string ic (cat acc (String.make 1 c)) b
+                 else build_string ic (cat acc (String.make 1 c)) (b-3)
+
     | '.' -> if (b == 0)
              then build_string ic (cat acc (String.make 1 c)) (-1)
              else build_string ic (cat acc (String.make 1 c)) b
@@ -340,15 +448,17 @@ let rec build_string ic acc b =
     | _ -> if (b<0)
            then build_string ic (cat acc (String.make 1 c)) 0
            else 
-       if (b mod 3 == 0)
+       if (b mod 4 == 0)
            then build_string ic (cat acc (String.make 1 c)) b
            else
-             if (b mod 3 == 1) 
+             if (b mod 4 == 1) 
              then build_string ic (cat acc (String.make 1 c)) (b-1)
-             else build_string ic (cat acc (String.make 1 c)) b
+             else
+               if (b mod 4 == 2)
+               then build_string ic (cat acc (String.make 1 c)) b
+               else build_string ic (cat acc (String.make 1 c)) b
   with End_of_file -> let _ = print_string (cat "-->" (cat acc "<--")) in close_in ic; acc
-
-
+   *)
 
 let rec list_char_to_string l =
   match l with
@@ -361,7 +471,7 @@ let rec string_to_list_char s =
   if(s=empty) then [] else s.[0]::(string_to_list_char (sub s 1 (length(s)-1)))
 
 let rec next_is c s =
-  (not (s=[])) && (List.hd s==c)
+  (not (s=[])) && (List.hd s=c)
      
 
 let rec remove_comments_aux s n acc =
@@ -397,45 +507,47 @@ let rec remove_comments_aux s n acc =
 
 let remove_comments s = list_char_to_string (remove_comments_aux (string_to_list_char s) 0 [])
 
+
+
 let rec read_eval_print ic fd_in fd_out nb_iter result =
-  (*  let output = open_out result in *)
   let rec read_eval_print_aux ic fd_in fd_out nb_iter acc =  
-    try let s' = (build_string ic empty 0) in
-        let _ = Format.print_string (cat "s':" s') in
-        let _ = Format.print_string "\n" in 
-        let _ = Format.print_string (cat "s'(without comments):" (remove_comments  s')) in
-        let _ = Format.print_string "\n" in 
-        let s  = remove_structure_in_string (remove_comments s') in 
-        let string_to_send = (*if (s=empty) then "(Add () \" Check nat.\")" else *) cat ("(Add () \"") (cat s "\")") in
-let _ = Format.print_string "->" in 
-let _ = Format.print_string s in
-let _ = Format.print_string "<-\n" in 
-        (*        let _ = Format.print_string string_to_send in*)
-      let _ = Format.print_flush () in 
-      (* let _ = Format.print_string string_to_send in*)
-      let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
-      (*  let _ = Unix.sleepf (1./.10.) in *)
-      (*let _ = Format.print_string "IO:" in *)
-      (*  let _ = Format.print_flush () in*)
-      (*      let _ = Unix.sleepf (1./.10.) in (* random value to leave time for serapi to answer *)*)
-      let _ = retrieve_answer fd_in in
-      (*let _ = output_string output s in
-      let _ = flush output in *)
-      (*  let _ = Format.print_string "atleastonce:" in *)
-      (*  let _ = Format.print_flush () in *)
-      (*  let _ = Format.print_string ans in*)
-      (*let _ = Format.print_string ":" in*)
-      let _ = Format.print_flush () in 
-      (* print the "s" into a new file *)
-      (*      let _ = if (upper_case s) then output_string output (cat "uppercase" s) else () in *)
-      read_eval_print_aux ic fd_in fd_out (nb_iter+1) (acc@[s'])
+    try let raw_string = (build_string ic empty '\n' 0) in
+        if (raw_string=empty) then read_eval_print_aux ic fd_in fd_out (nb_iter) (acc)
+        else
+          (*let _ = Format.print_string (cat "raw_string:" (cat raw_string ":\n")) in*)
+          let string_wo_comments = (remove_comments  raw_string) in 
+          (*let _ = Format.print_string (cat "string_wo_comments:" (cat string_wo_comments ":\n")) in*)
+          let string_wo_structure  = remove_structure_in_string string_wo_comments in
+          (*let _ = Format.print_string (cat "string_wo_structure:" (cat string_wo_structure ":\n")) in*)
+          
+          let string_to_send = (*if (raw_string=empty) then "(Add () \" Check nat.\")" else*) cat ("(Add () \"") (cat string_wo_structure "\")") in
+          (*        let _ = Format.print_string (cat "->" (cat string_wo_structure "<-\n")) in *)
+          (*        let _ = Format.print_string string_to_send in*)
+          let _ = Format.print_flush () in 
+          (* let _ = Format.print_string string_to_send in*)
+          let _ = Unix.write_substring fd_out string_to_send 0 (length string_to_send) in
+          (*let _ = Format.print_string "IO:" in *)
+          (*  let _ = Format.print_flush () in*)
+          let _ = retrieve_answer fd_in in
+          (*let _ = output_string output s in
+            let _ = flush output in *)
+          (*  let _ = Format.print_string "atleastonce:" in *)
+          (*  let _ = Format.print_flush () in *)
+          (*  let _ = Format.print_string ans in*)
+          (*let _ = Format.print_string ":" in*)
+          let _ = Format.print_flush () in 
+          (* print the "s" into a new file *)
+          (*      let _ = if (upper_case s) then output_string output (cat "uppercase" s) else () in *)
+          read_eval_print_aux ic fd_in fd_out (nb_iter+1) (acc@[raw_string])
     with  _ (* Bad file descriptor exception *) -> let _ = print_string (cat (cat "#steps:" (string_of_int nb_iter)) "\n") in
+                                                   let _ = List.iter (fun s -> print_string (cat "<" (cat s ">\n"))) acc in 
                                                    (nb_iter,acc)  in
   read_eval_print_aux ic fd_in fd_out nb_iter []
 
 
 let main () =
-  let _ = print_string "-*- Starting up coq-lint (alpha version: Thu Jun  8 15:58:23 CEST 2023) -*-\n" in
+  let _ = print_string "-*- Starting up coq-lint (alpha version: Fri Sep 29 15:08:32 CEST 2023, compatible with Coq 8.17.1) -*-\n" in
+let _ = print_string "*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*\n" in 
   let _ = Format.print_flush () in 
   let nb_args = Array.length Sys.argv - 1 in 
   let _ = if (nb_args<1) then
@@ -477,7 +589,7 @@ let main () =
 
   else
     (* parent - our main program *)
-    (* useless ends *)
+    (* close useless ends *)
     let _ = close sertop_reading_end in
     let _ = close sertop_writing_end in
     (* duplications *)
@@ -490,13 +602,14 @@ let main () =
     (*let _  = Format.print_string "ok-parent" in*)
     let vfile = output_file in (*cat "translated_files/" (Filename.basename Sys.argv.(1)) in *)
     let (nb,acc) = read_eval_print ic main_reading_end main_writing_end 0 vfile in
-    
+
     let whole_exec = (cat "(Exec " (cat (string_of_int nb) ")")) in
     let _ = Unix.write_substring main_writing_end whole_exec 0 (length whole_exec) in 
 (*    let _ = Format.print_string "running generate for this number of steps:" in 
     let _ = Format.print_string (string_of_int nb) in
     let _ = Format.print_string "\n" in *)
-    let _ = Format.print_flush () in 
+    let _ = Format.print_flush () in
+    let _ = Unix.sleepf (1.) in (* random value to leave time for serapi to answer *)
     let _ = generate_proof_script main_reading_end main_writing_end nb vfile acc in 
     let _ = kill pid 15 in 
     (*let _ = Format.print_string (string_of_int nb) in *)
