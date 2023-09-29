@@ -18,6 +18,10 @@ This file comes from the GeoCoq library (one_liner_orthocenter.v is in the galle
 
 # TODO
 
+* check and fix the examples tess.v, tata.v and toto.v
+
+* in GeoCoq, translating the file orientationv. : orie.v works (194 lines) but orien.v does not (269 lines)
+
 * issues with ... notation (so far replaced by ..)
 
 
