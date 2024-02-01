@@ -1,6 +1,6 @@
 # coq-lint: a prototype linter for Coq proof scripts
 
-based on Coq 8.17.1 and serapi 8.17.1+0.17.1
+based on Coq 8.18.0 and serapi 8.18.0+0.18.1
 
 # Compiling (from the main directory coq-lint)
 
